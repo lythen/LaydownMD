@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>LythenMarkdown.Core</RootNamespace>
+    <AssemblyName>LythenMarkdown.Core</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>Lythen Team</Authors>
+    <Description>Lythen-Markdown 核心业务模块</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Markdown 解析 -->
+    <PackageReference Include="Avalonia" Version="11.3.13" />
+    <PackageReference Include="Markdig" Version="1.1.2" />
+  </ItemGroup>
+
+</Project>
+

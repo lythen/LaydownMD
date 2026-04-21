@@ -1,0 +1,32 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LythenMarkdown.UI.ViewModels"
+        x:Class="LythenMarkdown.UI.Views.HelpWindow"
+        x:DataType="vm:HelpViewModel"
+        Title="{Binding Title}"
+        Width="700" Height="500"
+        WindowStartupLocation="CenterOwner"
+        CanResize="True"
+        ShowInTaskbar="False">
+    
+    <DockPanel Margin="16">
+        <!-- 按钮栏 -->
+        <StackPanel DockPanel.Dock="Bottom" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right"
+                    Spacing="8"
+                    Margin="0,16,0,0">
+            <Button x:Name="CloseButton"
+                    Content="关闭"
+                    Width="100"/>
+        </StackPanel>
+        
+        <!-- 内容区 -->
+        <ScrollViewer>
+            <TextBlock Text="{Binding Content}"
+                       TextWrapping="Wrap"
+                       FontSize="14"
+                       LineHeight="24"/>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

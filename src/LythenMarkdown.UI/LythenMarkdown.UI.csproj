@@ -1,0 +1,63 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RootNamespace>LythenMarkdown.UI</RootNamespace>
+    <AssemblyName>LythenMarkdown</AssemblyName>
+    <Version>1.0.0</Version>
+    <Authors>Lythen Team</Authors>
+    <Description>Lythen-Markdown Markdown 编辑器</Description>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- 程序图标 -->
+    <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  
+
+  <ItemGroup>
+    <!-- Avalonia UI (11.3.13 最新稳定版) -->
+    <PackageReference Include="Avalonia" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Diagnostics" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.3.13" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.3.13" />
+    
+    <!-- MVVM 框架 -->
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
+    
+    <!-- 依赖注入 -->
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <!-- HTML 渲染 (临时使用简单文本显示) -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 嵌入资源 -->
+    <EmbeddedResource Include="Resources\Contents\*.md" />
+  </ItemGroup>
+
+  <!-- Include Avalonia XAML files for compilation/embedding. Avoid using AvaloniaResource which duplicates embedding and causes duplicate x:Class errors. -->
+	<ItemGroup>
+		<Compile Update="**\*.xaml.cs">
+			<DependentUpon>%(Filename)</DependentUpon>
+			<SubType>Code</SubType>
+		</Compile>
+		<AvaloniaResource Include="**\*.xaml" />
+		<AvaloniaResource Include="Assets\**\*" />
+	</ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LythenMarkdown.Core\LythenMarkdown.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="AvaloniaEdit">
+      <HintPath>..\..\..\AvaloniaEdit-11.2.0\src\AvaloniaEdit\bin\Debug\net6.0\AvaloniaEdit.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+</Project>
