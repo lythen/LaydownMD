@@ -1,0 +1,106 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOTNET_VERSION: '8.0.x'
+  AVALONIA_VERSION: '11.2.8'
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Restore dependencies
+      run: dotnet restore LythenMarkdown.sln
+
+    - name: Build
+      run: dotnet build LythenMarkdown.sln --configuration Release --no-restore
+
+    - name: Run tests
+      run: dotnet test LythenMarkdown.sln --configuration Release --no-build --verbosity normal
+
+  build-windows:
+    name: Publish Windows
+    needs: build
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Publish
+      run: dotnet publish src/LythenMarkdown.UI/LythenMarkdown.UI.csproj --configuration Release --output ./publish/win-x64 -r win-x64 --self-contained false
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: LythenMarkdown-win-x64
+        path: ./publish/win-x64/**/*
+
+  build-linux:
+    name: Publish Linux
+    needs: build
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Publish
+      run: dotnet publish src/LythenMarkdown.UI/LythenMarkdown.UI.csproj --configuration Release --output ./publish/linux-x64 -r linux-x64 --self-contained false
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: LythenMarkdown-linux-x64
+        path: ./publish/linux-x64/**/*
+
+  build-macos:
+    name: Publish macOS
+    needs: build
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Publish
+      run: dotnet publish src/LythenMarkdown.UI/LythenMarkdown.UI.csproj --configuration Release --output ./publish/osx-x64 -r osx-x64 --self-contained false
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: LythenMarkdown-osx-x64
+        path: ./publish/osx-x64/**/*

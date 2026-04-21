@@ -1,0 +1,61 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LythenMarkdown.UI.Views.AboutDialog"
+        Title="关于 Lythen-Markdown"
+        Width="450" Height="350"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False">
+    
+    <StackPanel Margin="24" Spacing="16">
+        <!-- 软件图标 -->
+        <Border Width="80" Height="80" 
+                Background="#4A90D9" 
+                CornerRadius="12"
+                HorizontalAlignment="Center">
+            <TextBlock Text="LM" 
+                       FontSize="32" 
+                       FontWeight="Bold"
+                       Foreground="White"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
+        </Border>
+        
+        <!-- 软件名称 -->
+        <TextBlock Text="Lythen-Markdown"
+                   FontSize="24"
+                   FontWeight="Bold"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- 版本 -->
+        <TextBlock x:Name="VersionText"
+                   Text="版本 1.0.0"
+                   FontSize="14"
+                   Foreground="Gray"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- 描述 -->
+        <TextBlock Text="一款简洁高效的 Markdown 编辑器"
+                   FontSize="14"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- 技术栈 -->
+        <TextBlock Text="基于 Avalonia UI + .NET 8 构建"
+                   FontSize="12"
+                   Foreground="Gray"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- 版权 -->
+        <TextBlock Text="© 2026 Lythen Studio. All rights reserved."
+                   FontSize="11"
+                   Foreground="Gray"
+                   HorizontalAlignment="Center"/>
+        
+        <!-- 按钮 -->
+        <Button x:Name="CloseButton"
+                Content="确定"
+                HorizontalAlignment="Center"
+                Width="100"
+                Margin="0,16,0,0"/>
+    </StackPanel>
+</Window>

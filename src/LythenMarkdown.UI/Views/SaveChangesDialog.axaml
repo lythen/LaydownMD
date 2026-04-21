@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="LythenMarkdown.UI.Views.SaveChangesDialog"
+        Width="400"
+        Height="180"
+        WindowStartupLocation="CenterOwner"
+        CanResize="False"
+        ShowInTaskbar="False"
+        Title="保存更改">
+
+    <StackPanel Margin="20" Spacing="16">
+        <TextBlock Text="{Binding Message}"
+                   TextWrapping="Wrap"
+                   FontSize="14"/>
+
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Spacing="12">
+            <Button x:Name="SaveButton"
+                    Width="80"
+                    IsDefault="True"/>
+            <Button x:Name="DiscardButton"
+                    Width="80"/>
+            <Button x:Name="CancelButton"
+                    Width="80"
+                    IsCancel="True"/>
+        </StackPanel>
+    </StackPanel>
+</Window>

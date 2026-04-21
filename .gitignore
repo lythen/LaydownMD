@@ -1,0 +1,42 @@
+# .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.dll
+*.pdb
+
+# IDE
+.idea/
+.vs/
+*.DotSettings.user
+.idea/
+
+# Build outputs
+out/
+build/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test results
+TestResults/
+coverage/
+
+# NuGet
+packages/
+*.nupkg
+
+# Memory and personal files (excluded by user request)
+memory/
+daily/
+docs/
+
+# User settings
+appsettings.*.json

@@ -1,0 +1,43 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="https://github.com/avaloniaui">
+
+    <!-- 按钮样式 -->
+    <Style Selector="Button">
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+
+    <!-- 关闭按钮样式 -->
+    <Style Selector="Button.closeButton">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="FontSize" Value="14"/>
+    </Style>
+
+    <Style Selector="Button.closeButton:pointerover">
+        <Setter Property="Background" Value="#FFE81123"/>
+        <Setter Property="Foreground" Value="White"/>
+    </Style>
+
+    <!-- 菜单项样式 -->
+    <Style Selector="MenuItem">
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <!-- 文本框样式 -->
+    <Style Selector="TextBox">
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="CornerRadius" Value="4"/>
+    </Style>
+
+    <!-- 选项卡样式 -->
+    <Style Selector="TabItem">
+        <Setter Property="Padding" Value="12,6"/>
+    </Style>
+
+    <!-- 分隔线样式 -->
+    <Style Selector="Separator">
+        <Setter Property="Margin" Value="4,2"/>
+    </Style>
+
+</Styles>

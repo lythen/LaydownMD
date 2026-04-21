@@ -1,0 +1,337 @@
+using System;
+using System.Text;
+using Avalonia.Controls;
+using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using LythenMarkdown.Core.Interfaces;
+using LythenMarkdown.Core.Models;
+using LythenMarkdown.UI.Services;
+
+namespace LythenMarkdown.UI.ViewModels;
+
+public partial class TabItemViewModel : ObservableObject
+{
+    private readonly MainViewModel _mainViewModel;
+    private readonly IRenderService _renderService;
+    private readonly IFileService _fileService;
+    private readonly MarkdownToControlsRenderer _controlsRenderer;
+    private CancellationTokenSource? _renderDebounceCts;
+    
+    // 防抖延迟（毫秒）
+    private const int DebounceDelayMs = 150;
+
+    [ObservableProperty]
+    private string _id;
+
+    [ObservableProperty]
+    private Document _document;
+
+    [ObservableProperty]
+    private ViewMode _viewMode = ViewMode.Split;
+
+    /// <summary>
+    /// 预览区域是否显示
+    /// </summary>
+    public bool IsPreviewVisible => ViewMode == ViewMode.Split || ViewMode == ViewMode.Preview;
+
+    [ObservableProperty]
+    private string _renderedHtml = string.Empty;
+
+    /// <summary>
+    /// 用于 WebView 加载的 data: URI 格式 HTML
+    /// </summary>
+    [ObservableProperty]
+    private string _webViewSource = string.Empty;
+
+    /// <summary>
+    /// 渲染后的 Avalonia 控件树（用于原生渲染）
+    /// </summary>
+    [ObservableProperty]
+    private Panel? _renderedControls;
+
+    [ObservableProperty]
+    private string _title = "新建文档";
+
+    // 共享的 TextDocument，所有编辑器都使用这个
+    public TextDocument SharedDocument { get; }
+
+    public bool IsModified => Document.IsModified;
+
+    // 编辑器引用列表（可能有多个编辑器同时引用同一个 Document）
+    private readonly List<TextEditor> _editors = new();
+
+    public TabItemViewModel(MainViewModel mainViewModel, Document document)
+    {
+        _mainViewModel = mainViewModel;
+        _renderService = App.GetRequiredService<IRenderService>();
+        _fileService = App.GetRequiredService<IFileService>();
+        _controlsRenderer = new MarkdownToControlsRenderer();
+        _id = document.Id;
+        _document = document;
+        _title = document.Title;
+        
+        // 创建共享的 TextDocument
+        SharedDocument = new TextDocument(document.Content ?? string.Empty);
+        
+        // 监听 TextDocument 内容变化
+        SharedDocument.TextChanged += OnSharedDocumentTextChanged;
+        
+        ForceRender(); // 初始渲染
+    }
+
+    /// <summary>
+    /// 共享文档内容变化时触发
+    /// </summary>
+    private void OnSharedDocumentTextChanged(object? sender, EventArgs e)
+    {
+        // 同步 Document.Content
+        if (Document.Content != SharedDocument.Text)
+        {
+            Document.Content = SharedDocument.Text;
+            Title = Document.IsModified ? $"{Document.Title} *" : Document.Title;
+            OnPropertyChanged(nameof(IsModified));
+        }
+        
+        // 防抖渲染
+        DebouncedRender(SharedDocument.Text);
+    }
+
+    /// <summary>
+    /// 注册编辑器
+    /// </summary>
+    public void RegisterEditor(TextEditor editor)
+    {
+        if (!_editors.Contains(editor))
+        {
+            _editors.Add(editor);
+            // 设置共享文档
+            editor.Document = SharedDocument;
+        }
+    }
+
+    /// <summary>
+    /// 注销编辑器
+    /// </summary>
+    public void UnregisterEditor(TextEditor editor)
+    {
+        _editors.Remove(editor);
+    }
+
+    public void UpdateContent(string content)
+    {
+        // 直接更新 TextDocument，会触发 TextChanged 事件
+        if (SharedDocument.Text != content)
+        {
+            SharedDocument.Text = content;
+        }
+    }
+
+    [RelayCommand]
+    public async Task SaveAsync()
+    {
+        if (Document.IsNew)
+        {
+            return;
+        }
+
+        await _fileService.SaveFileAsync(Document);
+        Title = Document.Title;
+        OnPropertyChanged(nameof(IsModified));
+    }
+
+    public async Task SaveAsAsync(string path)
+    {
+        await _fileService.SaveAsAsync(Document, path);
+        Title = Document.Title;
+        OnPropertyChanged(nameof(IsModified));
+    }
+
+    /// <summary>
+    /// 防抖渲染（150ms 延迟）
+    /// </summary>
+    private void DebouncedRender(string content)
+    {
+        // 取消之前的渲染
+        _renderDebounceCts?.Cancel();
+        _renderDebounceCts = new CancellationTokenSource();
+
+        // 异步防抖渲染
+        _ = RenderWithDebounceAsync(content, _renderDebounceCts.Token);
+    }
+
+    private async Task RenderWithDebounceAsync(string content, CancellationToken token)
+    {
+        try
+        {
+            // 等待防抖延迟
+            await Task.Delay(DebounceDelayMs, token);
+            
+            // 执行渲染
+            var html = _renderService.Render(content);
+            var controls = _controlsRenderer.Render(content);
+            
+            // 更新 UI（在主线程）
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                RenderedHtml = html;
+                WebViewSource = CreateDataUri(html);
+                RenderedControls = controls;
+            });
+        }
+        catch (TaskCanceledException)
+        {
+            // 被取消，正常处理
+        }
+    }
+
+    public void ForceRender()
+    {
+        _renderDebounceCts?.Cancel();
+        var content = SharedDocument.Text;
+        var html = _renderService.Render(content);
+        var controls = _controlsRenderer.Render(content);
+        
+        RenderedHtml = html;
+        WebViewSource = CreateDataUri(html);
+        RenderedControls = controls;
+    }
+
+    /// <summary>
+    /// 创建 data: URI 用于 WebView 加载 HTML
+    /// </summary>
+    private static string CreateDataUri(string html)
+    {
+        // 添加基础样式
+        var styledHtml = $@"<!DOCTYPE html>
+<html>
+<head>
+<meta charset=""utf-8"">
+<meta name=""viewport"" content=""width=device-width, initial-scale=1"">
+<style>
+body {{
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding: 20px;
+    max-width: 100%;
+    margin: 0 auto;
+    color: #333;
+    background: #ffffff;
+}}
+h1, h2, h3, h4, h5, h6 {{
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+}}
+h1 {{ font-size: 2em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }}
+h2 {{ font-size: 1.5em; border-bottom: 1px solid #eaecef; padding-bottom: 0.3em; }}
+h3 {{ font-size: 1.25em; }}
+code {{
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%;
+    background-color: rgba(27,31,35,0.05);
+    border-radius: 3px;
+    font-family: 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+}}
+pre {{
+    padding: 16px;
+    overflow: auto;
+    font-size: 85%;
+    line-height: 1.45;
+    background-color: #f6f8fa;
+    border-radius: 3px;
+}}
+pre code {{
+    padding: 0;
+    margin: 0;
+    background-color: transparent;
+    border-radius: 0;
+}}
+blockquote {{
+    padding: 0 1em;
+    color: #6a737d;
+    border-left: 0.25em solid #dfe2e5;
+}}
+a {{
+    color: #0366d6;
+    text-decoration: none;
+}}
+a:hover {{
+    text-decoration: underline;
+}}
+img {{
+    max-width: 100%;
+    height: auto;
+}}
+table {{
+    border-collapse: collapse;
+    width: 100%;
+    margin: 16px 0;
+}}
+table th, table td {{
+    padding: 6px 13px;
+    border: 1px solid #dfe2e5;
+}}
+table tr:nth-child(2n) {{
+    background-color: #f6f8fa;
+}}
+hr {{
+    height: 0.25em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #e1e4e8;
+    border: 0;
+}}
+ul, ol {{
+    padding-left: 2em;
+}}
+li + li {{
+    margin-top: 0.25em;
+}}
+</style>
+</head>
+<body>
+{html}
+</body>
+</html>";
+
+        // Base64 编码 HTML 内容
+        var bytes = Encoding.UTF8.GetBytes(styledHtml);
+        var base64 = Convert.ToBase64String(bytes);
+        return $"data:text/html;charset=utf-8;base64,{base64}";
+    }
+
+    partial void OnViewModeChanged(ViewMode value)
+    {
+        // 通知预览可见性变化
+        OnPropertyChanged(nameof(IsPreviewVisible));
+        
+        if (value == ViewMode.Split || value == ViewMode.Preview)
+        {
+            ForceRender();
+        }
+    }
+
+    /// <summary>
+    /// 释放资源
+    /// </summary>
+    public void Dispose()
+    {
+        _renderDebounceCts?.Cancel();
+        _renderDebounceCts?.Dispose();
+        SharedDocument.TextChanged -= OnSharedDocumentTextChanged;
+    }
+
+    /// <summary>
+    /// 创建渲染控件的副本（Avalonia 控件不能共享父节点）
+    /// </summary>
+    public Panel RenderControlsCopy()
+    {
+        // 重新渲染以创建新的控件树实例
+        return _controlsRenderer.Render(SharedDocument.Text);
+    }
+}
