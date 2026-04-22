@@ -612,6 +612,10 @@ public partial class MainWindow : Window
     {
         if (DataContext is ViewModels.MainViewModel viewModel)
         {
+            // 先保存当前选中的标签页 ID（避免后续循环改变 SelectedTab）
+            var activeTabId = viewModel.SelectedTab?.Id;
+            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 保存 activeTabId: {activeTabId}");
+
             foreach (var tab in viewModel.Tabs.ToList())
             {
                 if (tab.IsModified)
@@ -640,6 +644,23 @@ public partial class MainWindow : Window
                     }
                 }
             }
+
+            // 恢复选中的标签页（被循环改变了）
+            if (activeTabId != null)
+            {
+                var activeTab = viewModel.Tabs.FirstOrDefault(t => t.Id == activeTabId);
+                if (activeTab != null)
+                {
+                    viewModel.SelectedTab = activeTab;
+                    System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 恢复 SelectedTab: {activeTab.Title}");
+                }
+            }
+
+            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 最终 SelectedTab: {viewModel.SelectedTab?.Title ?? "null"}");
+            
+            // 保存会话
+            await viewModel.SaveSessionAsync();
+            System.Diagnostics.Debug.WriteLine("[OnWindowClosing] 会话已保存");
         }
     }
 
@@ -673,5 +694,80 @@ public partial class MainWindow : Window
             UpdatePreviewControls(viewModel.SelectedTab);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// 调试：保存会话
+    /// </summary>
+    private async void OnSaveSession(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainViewModel viewModel)
+        {
+            await viewModel.SaveSessionAsync();
+            var path = viewModel.GetSessionService().GetSessionFilePath();
+            System.Diagnostics.Debug.WriteLine($"[Debug] 会话已保存到: {path}");
+            await ShowMessageAsync(this, $"会话已保存到:\n{path}");
+        }
+    }
+
+    /// <summary>
+    /// 调试：打开 session.json 文件位置
+    /// </summary>
+    private void OnOpenSessionFile(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainViewModel viewModel)
+        {
+            var path = viewModel.GetSessionService().GetSessionFilePath();
+            // 打开文件所在目录
+            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{path}\"");
+        }
+    }
+
+    /// <summary>
+    /// 调试：显示会话内容
+    /// </summary>
+    private async void OnShowSessionContent(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is ViewModels.MainViewModel viewModel)
+        {
+            var path = viewModel.GetSessionService().GetSessionFilePath();
+            if (System.IO.File.Exists(path))
+            {
+                var content = await System.IO.File.ReadAllTextAsync(path);
+                await ShowMessageAsync(this, $"Session 内容:\n\n{content}");
+            }
+            else
+            {
+                await ShowMessageAsync(this, $"session.json 不存在:\n{path}");
+            }
+        }
+    }
+
+    /// <summary>
+    /// 显示消息对话框
+    /// </summary>
+    private async Task ShowMessageAsync(Window parent, string message)
+    {
+        var dialog = new Window
+        {
+            Title = "提示",
+            Width = 400,
+            Height = 150,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(20),
+                Spacing = 15,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Children =
+                {
+                    new TextBlock { Text = message, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
+                    new Button { Content = "确定", HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center }
+                }
+            }
+        };
+        ((Button)((StackPanel)dialog.Content).Children[1]).Click += (s, args) => dialog.Close();
+        await dialog.ShowDialog(parent);
     }
 }

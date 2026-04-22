@@ -34,6 +34,11 @@ public interface ISessionService
     void StopAutoSave();
 
     /// <summary>
+    /// 设置会话数据提供程序（用于自动保存）
+    /// </summary>
+    void SetSessionDataProvider(Func<SessionData> provider);
+
+    /// <summary>
     /// 获取会话文件路径
     /// </summary>
     string GetSessionFilePath();

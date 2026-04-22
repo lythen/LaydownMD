@@ -29,6 +29,11 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<TabItemViewModel> _tabs = new();
 
     /// <summary>
+    /// 是否有标签页
+    /// </summary>
+    public bool HasTabs => Tabs.Count > 0;
+
+    /// <summary>
     /// 移动选项卡到新位置（支持拖拽排序）
     /// </summary>
     public void MoveTab(int fromIndex, int toIndex)
@@ -51,10 +56,25 @@ public partial class MainViewModel : ObservableObject
 
     partial void OnSelectedTabChanged(TabItemViewModel? oldValue, TabItemViewModel? newValue)
     {
+        System.Diagnostics.Debug.WriteLine($"[OnSelectedTabChanged] old={oldValue?.Title ?? "null"}, new={newValue?.Title ?? "null"}");
+        
         // 当切换选项卡时，触发事件通知 View 注册编辑器
         if (newValue != null)
         {
             EditorContentNeeded?.Invoke(this, newValue);
+            
+            // 同步 CurrentViewMode 为当前标签页的视图模式
+            if (oldValue != null && oldValue.ViewMode != newValue.ViewMode)
+            {
+                CurrentViewMode = newValue.ViewMode;
+                OnPropertyChanged(nameof(IsEditModeVisible));
+                OnPropertyChanged(nameof(IsSplitModeVisible));
+                OnPropertyChanged(nameof(IsPreviewModeVisible));
+                OnPropertyChanged(nameof(CurrentViewModeText));
+                OnPropertyChanged(nameof(IsEditModeChecked));
+                OnPropertyChanged(nameof(IsSplitModeChecked));
+                OnPropertyChanged(nameof(IsPreviewModeChecked));
+            }
         }
     }
 
@@ -116,6 +136,7 @@ public partial class MainViewModel : ObservableObject
 
     public async Task InitializeAsync()
     {
+        System.Diagnostics.Debug.WriteLine("[Session] InitializeAsync 开始...");
         IsLoading = true;
         try
         {
@@ -123,8 +144,21 @@ public partial class MainViewModel : ObservableObject
             _themeService.SetTheme(_settingsService.CurrentSettings.Theme);
             _localizationService.SetLanguage(_settingsService.CurrentSettings.Language);
 
-            // 创建新标签页
-            await NewFileAsync();
+            // 尝试恢复会话
+            await RestoreSessionAsync();
+            System.Diagnostics.Debug.WriteLine($"[Session] 恢复完成，当前标签数: {Tabs.Count}, SelectedTab: {SelectedTab?.Title ?? "null"}");
+
+            // 如果没有恢复任何标签页（会话为空或加载失败），创建新标签页
+            if (Tabs.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[Session] 无会话，创建新标签");
+                await NewFileAsync();
+                System.Diagnostics.Debug.WriteLine($"[Session] 创建新标签后，SelectedTab: {SelectedTab?.Title ?? "null"}");
+            }
+
+            // 启动自动保存（每30秒）
+            _sessionService.SetSessionDataProvider(() => BuildSessionData());
+            _sessionService.StartAutoSave(30);
 
             StatusMessage = "就绪";
         }
@@ -133,6 +167,201 @@ public partial class MainViewModel : ObservableObject
             IsLoading = false;
         }
     }
+
+    /// <summary>
+    /// 从会话恢复标签页
+    /// </summary>
+    private async Task RestoreSessionAsync()
+    {
+        System.Diagnostics.Debug.WriteLine("[Session] 开始恢复会话...");
+        try
+        {
+            var session = await _sessionService.LoadSessionAsync();
+            System.Diagnostics.Debug.WriteLine($"[Session] 加载会话: {(session == null ? "null" : $"{session.OpenTabs.Count} 个标签")}");
+            
+            if (session == null || session.OpenTabs.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine("[Session] 会话为空，跳过恢复");
+                return;
+            }
+
+            // 记录要恢复的视图模式（标签ID -> 视图模式）
+            var viewModesToRestore = session.OpenTabs.ToDictionary(t => t.Id, t => t.ViewMode);
+
+            var restoredCount = 0;
+            foreach (var tabSession in session.OpenTabs)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Session] 处理标签: {tabSession.Id}, 文件: {tabSession.FilePath}");
+                
+                // 如果有文件路径，尝试打开文件
+                if (!string.IsNullOrEmpty(tabSession.FilePath))
+                {
+                    // 检查文件是否存在
+                    if (!File.Exists(tabSession.FilePath))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Session] 文件不存在，跳过: {tabSession.FilePath}");
+                        // 文件已删除，跳过
+                        continue;
+                    }
+
+                    try
+                    {
+                        // 直接创建 Document，使用保存的 Id（不使用 OpenFileAsync，因为它会生成新 Id）
+                        var content = await File.ReadAllTextAsync(tabSession.FilePath);
+                        var fileInfo = new FileInfo(tabSession.FilePath);
+                        var document = new Document
+                        {
+                            Id = tabSession.Id,  // 使用保存的 Id
+                            FilePath = tabSession.FilePath,
+                            Content = content,
+                            OriginalContent = content,
+                            ModifiedAt = fileInfo.LastWriteTime,
+                            IsReadOnly = fileInfo.IsReadOnly,
+                            CursorPosition = tabSession.CursorPosition,
+                            ScrollOffsetY = tabSession.ScrollOffsetY
+                        };
+                        var tab = new TabItemViewModel(this, document);
+                        Tabs.Add(tab);
+                        restoredCount++;
+                        System.Diagnostics.Debug.WriteLine($"[Session] 成功恢复文件: {tabSession.FilePath}");
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[Session] 打开文件失败: {ex.Message}");
+                        // 打开失败，跳过
+                        continue;
+                    }
+                }
+                else
+                {
+                    // 新建文档，恢复内容
+                    var document = new Document
+                    {
+                        Id = tabSession.Id,  // 使用保存的 Id
+                        Content = tabSession.Content,
+                        OriginalContent = tabSession.OriginalContent,
+                        CursorPosition = tabSession.CursorPosition,
+                        ScrollOffsetY = tabSession.ScrollOffsetY
+                    };
+                    var tab = new TabItemViewModel(this, document);
+                    Tabs.Add(tab);
+                    restoredCount++;
+                }
+            }
+
+            // 恢复每个标签页的视图模式，并标记编辑状态
+            foreach (var tab in Tabs)
+            {
+                if (viewModesToRestore.TryGetValue(tab.Id, out var viewMode))
+                {
+                    tab.ViewMode = viewMode;
+                    System.Diagnostics.Debug.WriteLine($"[Session] 恢复标签 {tab.Title} 的视图模式: {viewMode}");
+                }
+                
+                // 如果文档内容与原始内容不同，标记为编辑状态
+                if (tab.Document.IsModified)
+                {
+                    tab.MarkAsEdited();
+                    System.Diagnostics.Debug.WriteLine($"[Session] 标记标签 {tab.Title} 为编辑状态");
+                }
+            }
+
+            // 恢复当前激活的标签
+            if (!string.IsNullOrEmpty(session.ActiveTabId))
+            {
+                System.Diagnostics.Debug.WriteLine($"[Session] 查找激活标签: {session.ActiveTabId}");
+                var activeTab = Tabs.FirstOrDefault(t => t.Id == session.ActiveTabId);
+                System.Diagnostics.Debug.WriteLine($"[Session] 找到激活标签: {activeTab?.Title ?? "null"}");
+                if (activeTab != null)
+                {
+                    SelectedTab = activeTab;
+                    System.Diagnostics.Debug.WriteLine($"[Session] 已设置激活标签: {activeTab.Title}");
+                }
+            }
+
+            // 恢复视图模式：使用活动标签页自身的视图模式，而不是 LastViewMode
+            // 这样每个标签页都能恢复自己的视图模式
+            if (SelectedTab != null)
+            {
+                var activeTabViewMode = SelectedTab.ViewMode;
+                CurrentViewMode = activeTabViewMode;
+                OnPropertyChanged(nameof(IsEditModeVisible));
+                OnPropertyChanged(nameof(IsSplitModeVisible));
+                OnPropertyChanged(nameof(IsPreviewModeVisible));
+                OnPropertyChanged(nameof(CurrentViewModeText));
+                OnPropertyChanged(nameof(IsEditModeChecked));
+                OnPropertyChanged(nameof(IsSplitModeChecked));
+                OnPropertyChanged(nameof(IsPreviewModeChecked));
+                System.Diagnostics.Debug.WriteLine($"[Session] 恢复活动标签 {SelectedTab.Title} 的视图模式: {activeTabViewMode}");
+            }
+
+            if (restoredCount > 0)
+            {
+                StatusMessage = $"已恢复 {restoredCount} 个标签页";
+                System.Diagnostics.Debug.WriteLine($"[Session] 恢复完成，最终标签数: {Tabs.Count}, 激活标签: {SelectedTab?.Title}");
+                // 通知 HasTabs 属性变化
+                OnPropertyChanged(nameof(HasTabs));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"恢复会话失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 构建会话数据（用于自动保存）
+    /// </summary>
+    private SessionData BuildSessionData()
+    {
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionData] SelectedTab = {SelectedTab?.Title ?? "null"}, Id = {SelectedTab?.Id}");
+        
+        var session = new SessionData
+        {
+            ActiveTabId = SelectedTab?.Id,
+            LastViewMode = CurrentViewMode
+        };
+
+        foreach (var tab in Tabs)
+        {
+            var tabSession = new TabSessionData
+            {
+                Id = tab.Id,
+                FilePath = tab.Document.FilePath,
+                Content = tab.Document.Content,
+                OriginalContent = tab.Document.OriginalContent,
+                CursorPosition = tab.Document.CursorPosition,
+                ScrollOffsetY = tab.Document.ScrollOffsetY,
+                ViewMode = tab.ViewMode
+            };
+            session.OpenTabs.Add(tabSession);
+            System.Diagnostics.Debug.WriteLine($"[BuildSessionData] 标签: Id={tab.Id}, Title={tab.Title}, FilePath={tab.Document.FilePath}");
+        }
+
+        return session;
+    }
+
+    /// <summary>
+    /// 保存当前会话
+    /// </summary>
+    public async Task SaveSessionAsync()
+    {
+        try
+        {
+            var session = BuildSessionData();
+            await _sessionService.SaveSessionAsync(session);
+            System.Diagnostics.Debug.WriteLine($"[Session] 已保存会话，包含 {session.OpenTabs.Count} 个标签页");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"保存会话失败: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 获取会话服务（用于调试）
+    /// </summary>
+    public ISessionService GetSessionService() => _sessionService;
 
     [RelayCommand]
     private async Task NewFileAsync()

@@ -22,6 +22,16 @@ public partial class TabItemViewModel : ObservableObject
     // 防抖延迟（毫秒）
     private const int DebounceDelayMs = 150;
 
+    /// <summary>
+    /// 是否已进行手动编辑（用于判断是否为编辑状态）
+    /// </summary>
+    private bool _hasManualEdit;
+
+    /// <summary>
+    /// 撤销/重做操作前的 HasManualEdit 状态（用于恢复）
+    /// </summary>
+    private bool _previousHasManualEdit;
+
     [ObservableProperty]
     private string _id;
 
@@ -57,7 +67,54 @@ public partial class TabItemViewModel : ObservableObject
     // 共享的 TextDocument，所有编辑器都使用这个
     public TextDocument SharedDocument { get; }
 
+    /// <summary>
+    /// 内容是否被修改（Content != OriginalContent）
+    /// </summary>
     public bool IsModified => Document.IsModified;
+
+    /// <summary>
+    /// 是否为编辑状态（进行过手动编辑，通过撤销/重做恢复到原始内容时会变回 false）
+    /// </summary>
+    public bool IsEdited => _hasManualEdit;
+
+    /// <summary>
+    /// 是否为只读文档
+    /// </summary>
+    public bool IsReadOnly => Document.IsReadOnly;
+
+    /// <summary>
+    /// 选项卡标题（根据状态显示不同样式）
+    /// - 只读文档：🔒 标题
+    /// - 编辑状态：标题 *
+    /// - 原始状态：标题
+    /// </summary>
+    public string TabTitle
+    {
+        get
+        {
+            var title = Title;
+            if (IsReadOnly)
+                return $"🔒 {title}";
+            if (IsEdited)
+                return $"{title} *";
+            return title;
+        }
+    }
+
+    /// <summary>
+    /// 只读状态变化时更新标题和编辑器只读状态
+    /// </summary>
+    partial void OnDocumentChanged(Document value)
+    {
+        OnPropertyChanged(nameof(IsReadOnly));
+        OnPropertyChanged(nameof(TabTitle));
+        
+        // 更新所有已注册编辑器的只读状态
+        foreach (var editor in _editors)
+        {
+            editor.IsReadOnly = IsReadOnly;
+        }
+    }
 
     // 编辑器引用列表（可能有多个编辑器同时引用同一个 Document）
     private readonly List<TextEditor> _editors = new();
@@ -82,15 +139,40 @@ public partial class TabItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 共享文档内容变化时触发
+    /// 共享文档内容变化后触发
     /// </summary>
     private void OnSharedDocumentTextChanged(object? sender, EventArgs e)
     {
+        // 只读文档不处理
+        if (IsReadOnly) return;
+
+        // 检查撤销/重做状态
+        var undoStack = SharedDocument.UndoStack;
+        
+        // 如果撤销栈和重做栈都为空，说明回到了初始状态（通过撤销/重做到的）
+        // 此时将编辑状态重置为 false
+        if (!undoStack.CanUndo && !undoStack.CanRedo)
+        {
+            if (_hasManualEdit)
+            {
+                _hasManualEdit = false;
+                UpdateTitleForEditState();
+            }
+        }
+        else
+        {
+            // 有撤销/重做历史，说明有手动编辑
+            if (!_hasManualEdit)
+            {
+                _hasManualEdit = true;
+                UpdateTitleForEditState();
+            }
+        }
+
         // 同步 Document.Content
         if (Document.Content != SharedDocument.Text)
         {
             Document.Content = SharedDocument.Text;
-            Title = Document.IsModified ? $"{Document.Title} *" : Document.Title;
             OnPropertyChanged(nameof(IsModified));
         }
         
@@ -99,16 +181,28 @@ public partial class TabItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 注册编辑器
+    /// 更新标题以反映编辑状态
+    /// </summary>
+    private void UpdateTitleForEditState()
+    {
+        OnPropertyChanged(nameof(IsEdited));
+        OnPropertyChanged(nameof(TabTitle));
+    }
+
+    /// <summary>
+    /// 注册编辑器（每次切换 Tab 时调用，确保编辑器显示正确的文档内容）
     /// </summary>
     public void RegisterEditor(TextEditor editor)
     {
         if (!_editors.Contains(editor))
         {
             _editors.Add(editor);
-            // 设置共享文档
-            editor.Document = SharedDocument;
         }
+        // 每次都设置 Document，确保编辑器显示正确的内容
+        editor.Document = SharedDocument;
+        
+        // 设置只读状态
+        editor.IsReadOnly = IsReadOnly;
     }
 
     /// <summary>
@@ -128,6 +222,18 @@ public partial class TabItemViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 标记为已编辑状态（用于从会话恢复时）
+    /// </summary>
+    public void MarkAsEdited()
+    {
+        if (!_hasManualEdit)
+        {
+            _hasManualEdit = true;
+            UpdateTitleForEditState();
+        }
+    }
+
     [RelayCommand]
     public async Task SaveAsync()
     {
@@ -138,14 +244,22 @@ public partial class TabItemViewModel : ObservableObject
 
         await _fileService.SaveFileAsync(Document);
         Title = Document.Title;
+        // 保存后不再处于编辑状态
+        _hasManualEdit = false;
         OnPropertyChanged(nameof(IsModified));
+        OnPropertyChanged(nameof(IsEdited));
+        OnPropertyChanged(nameof(TabTitle));
     }
 
     public async Task SaveAsAsync(string path)
     {
         await _fileService.SaveAsAsync(Document, path);
         Title = Document.Title;
+        // 保存后不再处于编辑状态
+        _hasManualEdit = false;
         OnPropertyChanged(nameof(IsModified));
+        OnPropertyChanged(nameof(IsEdited));
+        OnPropertyChanged(nameof(TabTitle));
     }
 
     /// <summary>

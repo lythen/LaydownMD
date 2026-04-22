@@ -33,7 +33,8 @@ public class FileService : IFileService
             FilePath = path,
             Content = content,
             OriginalContent = content,
-            ModifiedAt = fileInfo.LastWriteTime
+            ModifiedAt = fileInfo.LastWriteTime,
+            IsReadOnly = fileInfo.IsReadOnly
         };
     }
 

@@ -38,7 +38,7 @@ public class Document
     public int ScrollOffsetY { get; set; }
 
     /// <summary>
-    /// 是否已修改
+    /// 是否已修改（内容与原始内容不同）
     /// </summary>
     public bool IsModified => Content != OriginalContent;
 
@@ -46,6 +46,11 @@ public class Document
     /// 是否为新建文档（未保存到文件）
     /// </summary>
     public bool IsNew => string.IsNullOrEmpty(FilePath);
+
+    /// <summary>
+    /// 是否为只读文档
+    /// </summary>
+    public bool IsReadOnly { get; set; }
 
     /// <summary>
     /// 创建时间
