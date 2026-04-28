@@ -206,15 +206,25 @@ public partial class MainViewModel : ObservableObject
 
                     try
                     {
-                        // 直接创建 Document，使用保存的 Id（不使用 OpenFileAsync，因为它会生成新 Id）
-                        var content = await File.ReadAllTextAsync(tabSession.FilePath);
+                        // 优先使用会话中保存的内容（可能有未保存的编辑）
+                        // 如果会话内容为空，才从文件读取
+                        var content = !string.IsNullOrEmpty(tabSession.Content) 
+                            ? tabSession.Content 
+                            : await File.ReadAllTextAsync(tabSession.FilePath);
+                        
+                        // 原始内容优先使用会话中保存的值（支持连续编辑场景）
+                        // 如果会话中没有保存 OriginalContent，才从磁盘读取
+                        var originalContent = !string.IsNullOrEmpty(tabSession.OriginalContent) 
+                            ? tabSession.OriginalContent 
+                            : await File.ReadAllTextAsync(tabSession.FilePath);
+                        
                         var fileInfo = new FileInfo(tabSession.FilePath);
                         var document = new Document
                         {
                             Id = tabSession.Id,  // 使用保存的 Id
                             FilePath = tabSession.FilePath,
                             Content = content,
-                            OriginalContent = content,
+                            OriginalContent = originalContent,
                             ModifiedAt = fileInfo.LastWriteTime,
                             IsReadOnly = fileInfo.IsReadOnly,
                             CursorPosition = tabSession.CursorPosition,
@@ -223,7 +233,7 @@ public partial class MainViewModel : ObservableObject
                         var tab = new TabItemViewModel(this, document);
                         Tabs.Add(tab);
                         restoredCount++;
-                        System.Diagnostics.Debug.WriteLine($"[Session] 成功恢复文件: {tabSession.FilePath}");
+                        System.Diagnostics.Debug.WriteLine($"[Session] 成功恢复文件: {tabSession.FilePath}, Content长度={content.Length}, OriginalContent长度={originalContent.Length}, IsModified={document.IsModified}");
                     }
                     catch (Exception ex)
                     {
@@ -246,6 +256,7 @@ public partial class MainViewModel : ObservableObject
                     var tab = new TabItemViewModel(this, document);
                     Tabs.Add(tab);
                     restoredCount++;
+                    System.Diagnostics.Debug.WriteLine($"[Session] 成功恢复新建文档: {tabSession.Id}, Content长度={tabSession.Content?.Length ?? 0}");
                 }
             }
 
@@ -315,6 +326,7 @@ public partial class MainViewModel : ObservableObject
     private SessionData BuildSessionData()
     {
         System.Diagnostics.Debug.WriteLine($"[BuildSessionData] SelectedTab = {SelectedTab?.Title ?? "null"}, Id = {SelectedTab?.Id}");
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionData] 当前标签数: {Tabs.Count}");
         
         var session = new SessionData
         {
@@ -324,6 +336,9 @@ public partial class MainViewModel : ObservableObject
 
         foreach (var tab in Tabs)
         {
+            // 确保 Document.Content 与 SharedDocument.Text 同步（窗口关闭前可能没有触发 TextChanged）
+            tab.Document.Content = tab.SharedDocument.Text;
+            
             var tabSession = new TabSessionData
             {
                 Id = tab.Id,
@@ -335,9 +350,10 @@ public partial class MainViewModel : ObservableObject
                 ViewMode = tab.ViewMode
             };
             session.OpenTabs.Add(tabSession);
-            System.Diagnostics.Debug.WriteLine($"[BuildSessionData] 标签: Id={tab.Id}, Title={tab.Title}, FilePath={tab.Document.FilePath}");
+            System.Diagnostics.Debug.WriteLine($"[BuildSessionData] 标签: Id={tab.Id}, Title={tab.Title}, Content长度={tab.Document.Content?.Length ?? 0}, SharedDocument.Text长度={tab.SharedDocument.Text?.Length ?? 0}");
         }
 
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionData] 返回 session: {session.OpenTabs.Count} 个标签");
         return session;
     }
 
@@ -348,13 +364,19 @@ public partial class MainViewModel : ObservableObject
     {
         try
         {
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionAsync] 开始保存会话，当前标签数: {Tabs.Count}");
             var session = BuildSessionData();
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionAsync] BuildSessionData 完成，标签数: {session.OpenTabs.Count}");
+            foreach (var tab in session.OpenTabs)
+            {
+                System.Diagnostics.Debug.WriteLine($"[SaveSessionAsync] 标签 {tab.Id}: Content长度={tab.Content?.Length ?? 0}");
+            }
             await _sessionService.SaveSessionAsync(session);
             System.Diagnostics.Debug.WriteLine($"[Session] 已保存会话，包含 {session.OpenTabs.Count} 个标签页");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"保存会话失败: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionAsync] 保存会话失败: {ex.Message}, StackTrace: {ex.StackTrace}");
         }
     }
 
@@ -362,6 +384,43 @@ public partial class MainViewModel : ObservableObject
     /// 获取会话服务（用于调试）
     /// </summary>
     public ISessionService GetSessionService() => _sessionService;
+
+    /// <summary>
+    /// 同步构建会话数据（用于窗口关闭时）
+    /// </summary>
+    public SessionData BuildSessionDataSync()
+    {
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionDataSync] SelectedTab = {SelectedTab?.Title ?? "null"}, Id = {SelectedTab?.Id}");
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionDataSync] 当前标签数: {Tabs.Count}");
+        
+        var session = new SessionData
+        {
+            ActiveTabId = SelectedTab?.Id,
+            LastViewMode = CurrentViewMode
+        };
+
+        foreach (var tab in Tabs)
+        {
+            // 确保 Document.Content 与 SharedDocument.Text 同步
+            tab.Document.Content = tab.SharedDocument.Text;
+            
+            var tabSession = new TabSessionData
+            {
+                Id = tab.Id,
+                FilePath = tab.Document.FilePath,
+                Content = tab.Document.Content,
+                OriginalContent = tab.Document.OriginalContent,
+                CursorPosition = tab.Document.CursorPosition,
+                ScrollOffsetY = tab.Document.ScrollOffsetY,
+                ViewMode = tab.ViewMode
+            };
+            session.OpenTabs.Add(tabSession);
+            System.Diagnostics.Debug.WriteLine($"[BuildSessionDataSync] 标签: Id={tab.Id}, Title={tab.Title}, Content长度={tab.Document.Content?.Length ?? 0}");
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[BuildSessionDataSync] 返回 session: {session.OpenTabs.Count} 个标签");
+        return session;
+    }
 
     [RelayCommand]
     private async Task NewFileAsync()
@@ -405,10 +464,12 @@ public partial class MainViewModel : ObservableObject
 
     public async Task OpenFileAsync(string path)
     {
-        var existingTab = _tabService.FindTabByPath(path);
+        // 直接在 Tabs 中查找已打开的文件
+        var existingTab = Tabs.FirstOrDefault(t => t.Document.FilePath == path);
         if (existingTab != null)
         {
-            SelectedTab = Tabs.FirstOrDefault(t => t.Id == existingTab.Id);
+            SelectedTab = existingTab;
+            StatusMessage = $"已切换到: {existingTab.Title}";
             return;
         }
 
@@ -576,6 +637,93 @@ public partial class MainViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task CloseTabsToLeftAsync(TabItemViewModel? keepTab)
+    {
+        if (keepTab == null) return;
+
+        var index = Tabs.IndexOf(keepTab);
+        if (index <= 0) return; // 没有左边的标签
+
+        var tabsToClose = Tabs.Take(index).ToList();
+        foreach (var tab in tabsToClose)
+        {
+            if (tab.IsModified)
+            {
+                var parent = (App.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (parent != null)
+                {
+                    var result = await SaveChangesDialog.ShowAsync(parent, tab.Document.Title);
+                    
+                    switch (result)
+                    {
+                        case SaveChangesResult.Save:
+                            if (tab.Document.IsNew)
+                            {
+                                SelectedTab = tab;
+                                await SaveAsAsync();
+                            }
+                            else
+                            {
+                                await tab.SaveAsync();
+                            }
+                            break;
+                        case SaveChangesResult.Cancel:
+                            return;
+                        case SaveChangesResult.Discard:
+                            break;
+                    }
+                }
+            }
+            
+            await _tabService.CloseTabAsync(tab.Id, force: true);
+            Tabs.Remove(tab);
+        }
+    }
+
+    [RelayCommand]
+    private async Task CloseTabsToRightAsync(TabItemViewModel? keepTab)
+    {
+        if (keepTab == null) return;
+
+        var index = Tabs.IndexOf(keepTab);
+        var tabsToClose = Tabs.Skip(index + 1).ToList();
+        
+        foreach (var tab in tabsToClose)
+        {
+            if (tab.IsModified)
+            {
+                var parent = (App.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+                if (parent != null)
+                {
+                    var result = await SaveChangesDialog.ShowAsync(parent, tab.Document.Title);
+                    
+                    switch (result)
+                    {
+                        case SaveChangesResult.Save:
+                            if (tab.Document.IsNew)
+                            {
+                                SelectedTab = tab;
+                                await SaveAsAsync();
+                            }
+                            else
+                            {
+                                await tab.SaveAsync();
+                            }
+                            break;
+                        case SaveChangesResult.Cancel:
+                            return;
+                        case SaveChangesResult.Discard:
+                            break;
+                    }
+                }
+            }
+            
+            await _tabService.CloseTabAsync(tab.Id, force: true);
+            Tabs.Remove(tab);
+        }
+    }
+
+    [RelayCommand]
     private async Task CloseAllTabsAsync()
     {
         var tabsToClose = Tabs.ToList();
@@ -614,6 +762,43 @@ public partial class MainViewModel : ObservableObject
         }
         
         await NewFileAsync();
+    }
+
+    [RelayCommand]
+    private void OpenFileLocation(TabItemViewModel? tab)
+    {
+        if (tab == null) return;
+        
+        var filePath = tab.Document.FilePath;
+        if (string.IsNullOrEmpty(filePath))
+        {
+            StatusMessage = "无法打开位置：文件尚未保存";
+            return;
+        }
+
+        try
+        {
+            var directory = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
+            {
+                // Windows: 使用 explorer /select 打开文件所在目录并选中文件
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"/select,\"{filePath}\"",
+                    UseShellExecute = true
+                });
+                StatusMessage = $"已打开: {directory}";
+            }
+            else
+            {
+                StatusMessage = "目录不存在";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"打开失败: {ex.Message}";
+        }
     }
 
     [RelayCommand]

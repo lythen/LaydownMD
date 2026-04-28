@@ -32,6 +32,12 @@ public partial class TabItemViewModel : ObservableObject
     /// </summary>
     private bool _previousHasManualEdit;
 
+    /// <summary>
+    /// Document.Content 是否已与 SharedDocument.Text 同步
+    /// true: 无需再次同步; false: 需要同步
+    /// </summary>
+    private bool _contentSynced = true;
+
     [ObservableProperty]
     private string _id;
 
@@ -81,6 +87,11 @@ public partial class TabItemViewModel : ObservableObject
     /// 是否为只读文档
     /// </summary>
     public bool IsReadOnly => Document.IsReadOnly;
+
+    /// <summary>
+    /// 父级 MainViewModel 引用（用于 ContextMenu 绑定）
+    /// </summary>
+    public MainViewModel MainViewModel => _mainViewModel;
 
     /// <summary>
     /// 选项卡标题（根据状态显示不同样式）
@@ -135,8 +146,25 @@ public partial class TabItemViewModel : ObservableObject
         // 监听 TextDocument 内容变化
         SharedDocument.TextChanged += OnSharedDocumentTextChanged;
         
+        System.Diagnostics.Debug.WriteLine($"[TabItem] 初始化文档 {Title}, Content长度={document.Content?.Length ?? 0}, IsModified={document.IsModified}");
+        
+        // 标记为已初始化（在设置 TextChanged 事件之后，但在任何用户编辑之前）
+        _isInitialized = true;
+        
+        // 如果文档有修改历史，标记为已编辑状态
+        if (document.IsModified)
+        {
+            _hasManualEdit = true;
+            System.Diagnostics.Debug.WriteLine($"[TabItem] 文档 {Title} 被标记为已编辑（从会话恢复或之前有编辑）");
+        }
+        
         ForceRender(); // 初始渲染
     }
+
+    /// <summary>
+    /// 是否已完成初始化（用于忽略初始化时的 TextChanged 事件）
+    /// </summary>
+    private bool _isInitialized;
 
     /// <summary>
     /// 共享文档内容变化后触发
@@ -146,34 +174,54 @@ public partial class TabItemViewModel : ObservableObject
         // 只读文档不处理
         if (IsReadOnly) return;
 
-        // 检查撤销/重做状态
-        var undoStack = SharedDocument.UndoStack;
-        
-        // 如果撤销栈和重做栈都为空，说明回到了初始状态（通过撤销/重做到的）
-        // 此时将编辑状态重置为 false
-        if (!undoStack.CanUndo && !undoStack.CanRedo)
+        // 忽略初始化时的 TextChanged 事件
+        if (!_isInitialized)
         {
+            System.Diagnostics.Debug.WriteLine($"[TabItem] 忽略初始化时的 TextChanged");
+            return;
+        }
+
+        // 记录调试信息
+        var newText = SharedDocument.Text;
+        System.Diagnostics.Debug.WriteLine($"[TabItem] TextChanged: SharedDocument.Text={newText?.Length ?? -1}chars");
+
+        // 通过比较当前内容与原始内容来判断是否为编辑状态
+        // 无论通过何种方式（直接编辑、撤销、重做）到达原始内容，都应重置编辑状态
+        var isAtOriginalState = string.Equals(newText, Document.OriginalContent, StringComparison.Ordinal);
+        
+        if (isAtOriginalState)
+        {
+            // 回到原始内容，清空编辑状态
             if (_hasManualEdit)
             {
+                System.Diagnostics.Debug.WriteLine($"[TabItem] 回到原始内容，设置 _hasManualEdit=false");
                 _hasManualEdit = false;
                 UpdateTitleForEditState();
             }
         }
         else
         {
-            // 有撤销/重做历史，说明有手动编辑
+            // 内容与原始内容不同，标记为编辑状态
             if (!_hasManualEdit)
             {
+                System.Diagnostics.Debug.WriteLine($"[TabItem] 检测到编辑，设置 _hasManualEdit=true");
                 _hasManualEdit = true;
                 UpdateTitleForEditState();
             }
         }
 
-        // 同步 Document.Content
-        if (Document.Content != SharedDocument.Text)
+        // 同步 Document.Content - 始终同步，确保会话保存时内容正确
+        var contentChanged = Document.Content != SharedDocument.Text;
+        if (contentChanged)
         {
+            System.Diagnostics.Debug.WriteLine($"[TabItem] 同步 Document.Content");
             Document.Content = SharedDocument.Text;
+            _contentSynced = true;
             OnPropertyChanged(nameof(IsModified));
+        }
+        else
+        {
+            _contentSynced = true;
         }
         
         // 防抖渲染
@@ -197,12 +245,17 @@ public partial class TabItemViewModel : ObservableObject
         if (!_editors.Contains(editor))
         {
             _editors.Add(editor);
+            System.Diagnostics.Debug.WriteLine($"[TabItem] 注册新编辑器，当前已注册 {_editors.Count} 个");
         }
         // 每次都设置 Document，确保编辑器显示正确的内容
+        var currentDocContent = SharedDocument.Text;
+        System.Diagnostics.Debug.WriteLine($"[TabItem] 设置编辑器 Document, SharedDocument.Text 长度={currentDocContent?.Length ?? -1}");
         editor.Document = SharedDocument;
         
         // 设置只读状态
         editor.IsReadOnly = IsReadOnly;
+        
+        System.Diagnostics.Debug.WriteLine($"[TabItem] 编辑器注册完成, Document.Content 长度={Document.Content?.Length ?? -1}");
     }
 
     /// <summary>
@@ -234,6 +287,32 @@ public partial class TabItemViewModel : ObservableObject
         }
     }
 
+    /// <summary>
+    /// 确保 Document.Content 与 SharedDocument.Text 同步
+    /// 返回是否进行了同步操作
+    /// </summary>
+    public bool EnsureContentSynced()
+    {
+        if (_contentSynced)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TabItem] {Title}: 内容已同步，无需操作");
+            return false;
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[TabItem] {Title}: 强制同步内容到 Document.Content");
+        Document.Content = SharedDocument.Text;
+        _contentSynced = true;
+        return true;
+    }
+
+    /// <summary>
+    /// 标记内容已修改，需要同步
+    /// </summary>
+    public void MarkContentDirty()
+    {
+        _contentSynced = false;
+    }
+
     [RelayCommand]
     public async Task SaveAsync()
     {
@@ -243,6 +322,10 @@ public partial class TabItemViewModel : ObservableObject
         }
 
         await _fileService.SaveFileAsync(Document);
+        
+        // 保存后更新 OriginalContent，这样 IsModified 才能正确反映状态
+        Document.OriginalContent = Document.Content;
+        
         Title = Document.Title;
         // 保存后不再处于编辑状态
         _hasManualEdit = false;
@@ -254,6 +337,10 @@ public partial class TabItemViewModel : ObservableObject
     public async Task SaveAsAsync(string path)
     {
         await _fileService.SaveAsAsync(Document, path);
+        
+        // 保存后更新 OriginalContent
+        Document.OriginalContent = Document.Content;
+        
         Title = Document.Title;
         // 保存后不再处于编辑状态
         _hasManualEdit = false;

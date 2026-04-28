@@ -42,4 +42,9 @@ public interface ISessionService
     /// 获取会话文件路径
     /// </summary>
     string GetSessionFilePath();
+    
+    /// <summary>
+    /// 同步保存会话（用于窗口关闭时）
+    /// </summary>
+    void SaveSessionSync(SessionData session);
 }

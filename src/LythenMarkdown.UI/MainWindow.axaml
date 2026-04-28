@@ -227,7 +227,30 @@
                     <TabControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:TabItemViewModel">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <!-- 只读文档显示锁定图标 -->
+                                <StackPanel.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="打开文件位置"
+                                                  Command="{Binding MainViewModel.OpenFileLocationCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="关闭"
+                                                  Command="{Binding MainViewModel.CloseTabCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="关闭左边"
+                                                  Command="{Binding MainViewModel.CloseTabsToLeftCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <MenuItem Header="关闭右边"
+                                                  Command="{Binding MainViewModel.CloseTabsToRightCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <Separator/>
+                                        <MenuItem Header="关闭其他"
+                                                  Command="{Binding MainViewModel.CloseOtherTabsCommand}"
+                                                  CommandParameter="{Binding}"/>
+                                        <MenuItem Header="关闭全部"
+                                                  Command="{Binding MainViewModel.CloseAllTabsCommand}"/>
+                                    </ContextMenu>
+                                </StackPanel.ContextMenu>
                                 <TextBlock Text="{Binding TabTitle}"
                                            VerticalAlignment="Center"
                                            Margin="0,0,8,0"/>

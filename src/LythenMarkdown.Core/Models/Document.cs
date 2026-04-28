@@ -20,7 +20,15 @@ public class Document
     /// <summary>
     /// 文档内容
     /// </summary>
-    public string Content { get; set; } = string.Empty;
+    public string Content 
+    { 
+        get => _content; 
+        set
+        {
+            _content = value;
+        }
+    }
+    private string _content = string.Empty;
 
     /// <summary>
     /// 原始内容（用于检测修改）

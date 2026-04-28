@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using LythenMarkdown.Core.Interfaces;
 using LythenMarkdown.Core.Models;
 using LythenMarkdown.UI.ViewModels;
 using LythenMarkdown.UI.Views;
@@ -23,10 +24,14 @@ public partial class MainWindow : Window
 {
     private AvaloniaEdit.TextEditor? _mainEditor;
     private AvaloniaEdit.TextEditor? _splitEditor;
+    private readonly ISessionService _sessionService;
     
     public MainWindow()
     {
         InitializeComponent();
+        
+        // 获取 SessionService
+        _sessionService = App.GetRequiredService<ISessionService>();
         
         // 获取控件引用
         _mainEditor = this.FindControl<AvaloniaEdit.TextEditor>("MainEditor");
@@ -608,60 +613,56 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    private bool _isClosing;
+    
+    private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
+        System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 开始执行...");
+        
+        if (_isClosing)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 已在关闭中，跳过");
+            return;
+        }
+        _isClosing = true;
+        
         if (DataContext is ViewModels.MainViewModel viewModel)
         {
-            // 先保存当前选中的标签页 ID（避免后续循环改变 SelectedTab）
-            var activeTabId = viewModel.SelectedTab?.Id;
-            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 保存 activeTabId: {activeTabId}");
+            // 取消订阅事件，防止事件触发时访问正在关闭的 UI
+            viewModel.EditorContentNeeded -= OnEditorContentNeeded;
 
-            foreach (var tab in viewModel.Tabs.ToList())
-            {
-                if (tab.IsModified)
-                {
-                    var result = await SaveChangesDialog.ShowAsync(this, tab.Document.Title);
-                    
-                    switch (result)
-                    {
-                        case SaveChangesResult.Save:
-                            if (tab.Document.IsNew)
-                            {
-                                // 设置当前选中的 tab 为待保存的 tab
-                                viewModel.SelectedTab = tab;
-                                await viewModel.SaveAsCommand.ExecuteAsync(null);
-                            }
-                            else
-                            {
-                                await tab.SaveAsync();
-                            }
-                            break;
-                        case SaveChangesResult.Cancel:
-                            e.Cancel = true;
-                            return;
-                        case SaveChangesResult.Discard:
-                            break;
-                    }
-                }
-            }
-
-            // 恢复选中的标签页（被循环改变了）
-            if (activeTabId != null)
-            {
-                var activeTab = viewModel.Tabs.FirstOrDefault(t => t.Id == activeTabId);
-                if (activeTab != null)
-                {
-                    viewModel.SelectedTab = activeTab;
-                    System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 恢复 SelectedTab: {activeTab.Title}");
-                }
-            }
-
-            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 最终 SelectedTab: {viewModel.SelectedTab?.Title ?? "null"}");
+            System.Diagnostics.Debug.WriteLine($"[OnWindowClosing] 直接保存会话（不弹出保存对话框）");
             
-            // 保存会话
-            await viewModel.SaveSessionAsync();
-            System.Diagnostics.Debug.WriteLine("[OnWindowClosing] 会话已保存");
+            // 直接保存会话 - 会话保存是自动的，不询问用户
+            // 用户可以选择手动保存到文件，但这不是关闭时的必要操作
+            SaveSessionAndClose(viewModel);
         }
+    }
+    
+    private void SaveSessionAndClose(MainViewModel viewModel)
+    {
+        System.Diagnostics.Debug.WriteLine($"[SaveSessionAndClose] 开始保存会话...");
+        
+        // 确保所有标签页的 Document.Content 已同步
+        int syncedCount = 0;
+        foreach (var tab in viewModel.Tabs)
+        {
+            if (tab.EnsureContentSynced())
+            {
+                syncedCount++;
+            }
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionAndClose] 标签 {tab.Title}: Content长度={tab.Document.Content?.Length ?? 0}");
+        }
+        System.Diagnostics.Debug.WriteLine($"[SaveSessionAndClose] 同步了 {syncedCount} 个标签页的内容");
+        
+        // 保存会话（同步）
+        var session = viewModel.BuildSessionDataSync();
+        _sessionService.SaveSessionSync(session);
+        System.Diagnostics.Debug.WriteLine($"[SaveSessionAndClose] 会话保存完成");
+        
+        // 手动关闭窗口
+        System.Diagnostics.Debug.WriteLine($"[SaveSessionAndClose] 关闭窗口");
+        Close();
     }
 
     /// <summary>
@@ -673,6 +674,23 @@ public partial class MainWindow : Window
             return;
 
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        // Ctrl+S 保存当前文档
+        if (ctrl && !shift && e.Key == Key.S)
+        {
+            OnSaveFile(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
+
+        // Shift+Ctrl+S 另存为
+        if (ctrl && shift && e.Key == Key.S)
+        {
+            OnSaveAsFile(this, new RoutedEventArgs());
+            e.Handled = true;
+            return;
+        }
 
         // Ctrl+1 编辑模式
         if (ctrl && e.Key == Key.D1)

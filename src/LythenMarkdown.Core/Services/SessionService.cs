@@ -117,4 +117,30 @@ public class SessionService : ISessionService
         var directory = Path.GetDirectoryName(basePath) ?? "";
         return Path.Combine(directory, "session.json");
     }
+    
+    /// <summary>
+    /// 同步保存会话（用于窗口关闭时）
+    /// </summary>
+    public void SaveSessionSync(SessionData session)
+    {
+        try
+        {
+            session.SavedAt = DateTime.Now;
+            var path = GetSessionFilePath();
+            var directory = Path.GetDirectoryName(path);
+
+            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var json = JsonSerializer.Serialize(session, _jsonOptions);
+            File.WriteAllText(path, json);
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionSync] 会话已保存到: {path}");
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SaveSessionSync] 保存会话失败: {ex.Message}");
+        }
+    }
 }
