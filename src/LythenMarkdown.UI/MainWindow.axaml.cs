@@ -4,19 +4,15 @@ using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
-using Avalonia.Media;
 using Avalonia.VisualTree;
 using AvaloniaEdit;
-using AvaloniaEdit.Document;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using LythenMarkdown.Core.Interfaces;
 using LythenMarkdown.Core.Models;
 using LythenMarkdown.UI.ViewModels;
 using LythenMarkdown.UI.Views;
 using WinState = Avalonia.Controls.WindowState;
+using TabItemModel = LythenMarkdown.Core.Models.TabItem;
+using AvaloniaTabItem = Avalonia.Controls.TabItem;
 
 namespace LythenMarkdown.UI;
 
@@ -25,6 +21,14 @@ public partial class MainWindow : Window
     private AvaloniaEdit.TextEditor? _mainEditor;
     private AvaloniaEdit.TextEditor? _splitEditor;
     private readonly ISessionService _sessionService;
+    
+    // 标签页拖拽排序状态
+    private TabItemViewModel? _draggedTab;
+    private Point _dragStartPoint;
+    private bool _isDragging;
+
+    // 弹窗预览管理：TabId -> PreviewPopupWindow，每个标签页最多一个弹窗
+    private readonly Dictionary<string, Views.PreviewPopupWindow> _previewPopups = new();
     
     public MainWindow()
     {
@@ -215,6 +219,69 @@ public partial class MainWindow : Window
         return editors;
     }
 
+    /// <summary>
+    /// 查找当前可见的编辑器（根据视图模式）
+    /// </summary>
+    private AvaloniaEdit.TextEditor? FindCurrentVisibleEditor()
+    {
+        if (DataContext is not ViewModels.MainViewModel vm || vm.SelectedTab == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] 没有选中的标签页");
+            return null;
+        }
+
+        var viewMode = vm.SelectedTab.ViewMode;
+        System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] viewMode={viewMode}");
+        
+        // 遍历整个窗口的视觉树查找所有 TextEditor
+        var allEditors = this.GetVisualDescendants()
+            .OfType<AvaloniaEdit.TextEditor>()
+            .ToList();
+
+        System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] 窗口中共有 {allEditors.Count} 个 TextEditor");
+
+        if (!allEditors.Any()) return null;
+
+        // 遍历所有编辑器，找到可见的
+        foreach (var editor in allEditors)
+        {
+            var isVisible = editor.IsVisible;
+            var editorName = editor.Name ?? "(无名称)";
+            System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] editor={editor.GetHashCode()}, Name={editorName}, IsVisible={isVisible}");
+        }
+
+        // 根据视图模式返回正确的编辑器
+        // SplitMode: MainEditor 可见（ZIndex=1）
+        // EditMode: SplitEditor 可见（ZIndex=2）
+        // PreviewMode: 没有编辑器
+        foreach (var editor in allEditors)
+        {
+            if (!editor.IsVisible) continue;
+
+            var editorName = editor.Name ?? "";
+            
+            if (viewMode == ViewMode.Split && editorName == "MainEditor")
+            {
+                System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] 返回 MainEditor");
+                return editor;
+            }
+            else if (viewMode == ViewMode.Edit && editorName == "SplitEditor")
+            {
+                System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] 返回 SplitEditor");
+                return editor;
+            }
+            else if (viewMode == ViewMode.Preview)
+            {
+                System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] Preview模式，返回null");
+                return null;
+            }
+        }
+
+        // 如果没有匹配到名称，返回第一个可见的编辑器
+        System.Diagnostics.Debug.WriteLine($"[FindCurrentVisibleEditor] 返回第一个可见编辑器");
+        return allEditors.FirstOrDefault(e => e.IsVisible);
+    }
+
     private void LoadEditorContent(ViewModels.MainViewModel vm)
     {
         LoadEditorContent(vm.SelectedTab!);
@@ -263,15 +330,13 @@ public partial class MainWindow : Window
         this.FindControl<MenuItem>("CloseMenuItem")?.AddHandler(MenuItem.ClickEvent, OnCloseTab);
         this.FindControl<MenuItem>("ExitMenuItem")?.AddHandler(MenuItem.ClickEvent, OnExit);
         
-        // 编辑菜单
-        this.FindControl<MenuItem>("UndoMenuItem")?.AddHandler(MenuItem.ClickEvent, OnUndo);
-        this.FindControl<MenuItem>("RedoMenuItem")?.AddHandler(MenuItem.ClickEvent, OnRedo);
-        this.FindControl<MenuItem>("CutMenuItem")?.AddHandler(MenuItem.ClickEvent, OnCut);
-        this.FindControl<MenuItem>("CopyMenuItem")?.AddHandler(MenuItem.ClickEvent, OnCopy);
-        this.FindControl<MenuItem>("PasteMenuItem")?.AddHandler(MenuItem.ClickEvent, OnPaste);
-        this.FindControl<MenuItem>("SelectAllMenuItem")?.AddHandler(MenuItem.ClickEvent, OnSelectAll);
+        // 编辑菜单（已在 XAML 中通过 Click="..." 直接绑定）
+        // Find/Replace 仍需代码处理
         this.FindControl<MenuItem>("FindMenuItem")?.AddHandler(MenuItem.ClickEvent, OnFind);
         this.FindControl<MenuItem>("ReplaceMenuItem")?.AddHandler(MenuItem.ClickEvent, OnReplace);
+
+        // 格式化菜单（使用 Command 绑定，在 ViewModel 中处理）
+        // 注意：这里不再重复绑定 Click 事件，避免触发两次
         
         // 视图菜单
         this.FindControl<MenuItem>("EditModeMenuItem")?.AddHandler(MenuItem.ClickEvent, OnEditMode);
@@ -376,37 +441,37 @@ public partial class MainWindow : Window
     
     private void OnUndo(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.Undo();
     }
     
     private void OnRedo(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.Redo();
     }
     
     private void OnCut(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.Cut();
     }
     
     private void OnCopy(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.Copy();
     }
     
     private void OnPaste(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.Paste();
     }
     
     private void OnSelectAll(object? sender, RoutedEventArgs e)
     {
-        var editor = _mainEditor ?? _splitEditor;
+        var editor = FindCurrentVisibleEditor();
         editor?.SelectAll();
     }
     
@@ -422,7 +487,101 @@ public partial class MainWindow : Window
     
     private void OnBold(object? sender, RoutedEventArgs e)
     {
-        InsertMarkdown("**", "**");
+        // 从视觉树中查找当前可见的编辑器
+        var editor = FindCurrentVisibleEditor();
+        
+        if (editor == null || editor.Document == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OnBold] 没有可用的编辑器");
+            return;
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[OnBold] editor={editor.GetHashCode()}");
+
+        // 使用编辑器的 SelectionStart 和 SelectionLength 获取选区信息
+        var caretOffset = editor.CaretOffset;
+        var selectionStart = editor.SelectionStart;
+        var selectionLength = editor.SelectionLength;
+        var textLength = editor.Document.TextLength;
+        var selectionEnd = selectionStart + selectionLength;
+
+        System.Diagnostics.Debug.WriteLine($"[OnBold] BEFORE: caretOffset={caretOffset}, selectionStart={selectionStart}, selectionLength={selectionLength}, textLength={textLength}");
+
+        // 直接在编辑器上操作
+        if (selectionLength > 0)
+        {
+            // 有选区：在选区前后插入 ** (总共4个*)
+            System.Diagnostics.Debug.WriteLine($"[OnBold] 有选区: startOffset={selectionStart}, endOffset={selectionEnd}, 即将插入 ** text **");
+            
+            // 先插入后缀（位置靠后）
+            editor.Document.Insert(selectionEnd, "**");
+            // 再插入前缀
+            editor.Document.Insert(selectionStart, "**");
+            
+            // 重新设置选区（选中原始文本部分）
+            editor.SelectionStart = selectionStart + 2;
+            editor.SelectionLength = selectionLength;
+        }
+        else
+        {
+            // 无选区：插入 **** 并将光标定位到中间
+            System.Diagnostics.Debug.WriteLine($"[OnBold] 无选区: 在位置 {caretOffset} 插入 ****");
+            editor.Document.Insert(caretOffset, "****");
+            editor.CaretOffset = caretOffset + 2;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[OnBold] AFTER: Document长度={editor.Document.TextLength}");
+    }
+    
+    /// <summary>
+    /// 从 TabItem 的视觉树中查找 TextEditor
+    /// </summary>
+    private AvaloniaEdit.TextEditor? FindEditorInTabItem(TabItemViewModel tab)
+    {
+        if (tab == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[FindEditor] tab 参数为空");
+            return null;
+        }
+        
+        // 直接使用 TabItemViewModel 中注册的编辑器
+        // TabItemViewModel 在 RegisterEditor 时会维护编辑器列表
+        var editor = tab.GetLastRegisteredEditor();
+        
+        if (editor == null)
+        {
+            // 如果没有注册的编辑器，尝试从视觉树查找（作为后备方案）
+            var tabControl = this.FindControl<TabControl>("MainTabControl");
+            if (tabControl != null)
+            {
+                var selectedVm = tabControl.SelectedItem as TabItemViewModel;
+                if (selectedVm != null)
+                {
+                    // 查找 DataContext 匹配的 TabItem
+                    var tabItem = tabControl.GetVisualDescendants()
+                        .OfType<AvaloniaTabItem>()
+                        .FirstOrDefault(ti => ti.DataContext == selectedVm);
+                        
+                    if (tabItem != null)
+                    {
+                        // 尝试获取 ContentPresenter 中的编辑器
+                        var contentPresenter = tabItem.GetVisualDescendants()
+                            .OfType<ContentPresenter>()
+                            .FirstOrDefault();
+                            
+                        if (contentPresenter != null)
+                        {
+                            editor = contentPresenter.GetVisualDescendants()
+                                .OfType<AvaloniaEdit.TextEditor>()
+                                .LastOrDefault();
+                        }
+                    }
+                }
+            }
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[FindEditor] ViewMode={tab.ViewMode}, 编辑器={editor?.GetHashCode() ?? 0}");
+        return editor;
     }
     
     private void OnItalic(object? sender, RoutedEventArgs e)
@@ -467,28 +626,40 @@ public partial class MainWindow : Window
     
     private void InsertMarkdown(string prefix, string suffix)
     {
-        var editor = _mainEditor ?? _splitEditor;
-        if (editor == null) return;
-        
-        var start = editor.SelectionStart;
-        var length = editor.SelectionLength;
-        var text = editor.Text;
-        
-        if (length > 0)
+        // 使用与 OnBold 相同的方式获取编辑器
+        var editor = FindCurrentVisibleEditor();
+        if (editor == null || editor.Document == null) return;
+
+        var caretOffset = editor.CaretOffset;
+        var selectionLength = editor.SelectionLength;
+        var document = editor.Document;
+
+        System.Diagnostics.Debug.WriteLine($"[InsertMarkdown] prefix='{prefix}', suffix='{suffix}', caretOffset={caretOffset}, selectionLength={selectionLength}");
+
+        if (selectionLength > 0)
         {
-            var selectedText = text.Substring(start, length);
-            editor.Text = text.Substring(0, start) + prefix + selectedText + suffix + text.Substring(start + length);
-            editor.SelectionStart = start + prefix.Length;
-            editor.SelectionLength = length;
+            // 有选区：在选区前后插入前后缀
+            var startOffset = editor.SelectionStart;
+            var endOffset = startOffset + selectionLength;
+            
+            // 先插入后缀（位置靠后）
+            document.Insert(endOffset, suffix);
+            // 再插入前缀
+            document.Insert(startOffset, prefix);
+            
+            // 重新设置选区
+            editor.SelectionStart = startOffset + prefix.Length;
+            editor.SelectionLength = selectionLength;
         }
         else
         {
-            var caretOffset = editor.CaretOffset;
-            editor.Text = text.Substring(0, caretOffset) + prefix + suffix + text.Substring(caretOffset);
+            // 无选区：插入前后缀并将光标定位到中间
+            var textToInsert = prefix + suffix;
+            document.Insert(caretOffset, textToInsert);
             editor.CaretOffset = caretOffset + prefix.Length;
         }
     }
-    
+
     private void OnEditMode(object? sender, RoutedEventArgs e)
     {
         if (DataContext is ViewModels.MainViewModel vm)
@@ -522,7 +693,33 @@ public partial class MainWindow : Window
     
     private void OnPopupPreview(object? sender, RoutedEventArgs e)
     {
-        // TODO: 实现弹窗预览
+        if (DataContext is not ViewModels.MainViewModel vm || vm.SelectedTab == null)
+            return;
+
+        var tab = vm.SelectedTab;
+        var tabId = tab.Id;
+
+        // 多弹窗管理：如果该标签的弹窗已存在，激活它
+        if (_previewPopups.TryGetValue(tabId, out var existingPopup))
+        {
+            try { existingPopup.Activate(); } catch { _previewPopups.Remove(tabId); }
+            return;
+        }
+
+        // 创建新弹窗
+        var popup = new Views.PreviewPopupWindow(tab)
+        {
+            // 使用 MainWindow 作为父窗口，确保居中
+        };
+
+        // 弹窗关闭时从字典移除
+        popup.Closed += (_, _) =>
+        {
+            _previewPopups.Remove(tabId);
+        };
+
+        _previewPopups[tabId] = popup;
+        popup.Show(this);
     }
     
     private void OnFullscreen(object? sender, RoutedEventArgs e)
@@ -595,8 +792,31 @@ public partial class MainWindow : Window
 
     private async void OnDrop(object? sender, DragEventArgs e)
     {
+        // 处理标签页拖拽排序
+        if (e.Data.Contains("TabItem") && sender is Control targetControl)
+        {
+            var draggedTab = e.Data.Get("TabItem") as TabItemViewModel;
+            if (draggedTab != null && DataContext is ViewModels.MainViewModel mainVm)
+            {
+                // 计算目标标签页索引
+                var targetIndex = GetTargetTabIndex(e);
+                if (targetIndex >= 0)
+                {
+                    var currentIndex = mainVm.Tabs.IndexOf(draggedTab);
+                    if (currentIndex >= 0 && currentIndex != targetIndex)
+                    {
+                        // 调整目标索引：如果拖拽到右侧，需要偏移
+                        if (targetIndex > currentIndex) targetIndex--;
+                        mainVm.MoveTab(currentIndex, targetIndex);
+                    }
+                }
+            }
+            return;
+        }
+        
+        // 处理文件拖放
         if (e.Data.Contains(DataFormats.Files) && 
-            DataContext is ViewModels.MainViewModel viewModel)
+            DataContext is ViewModels.MainViewModel fileVm)
         {
             var files = e.Data.GetFiles();
             if (files != null)
@@ -606,11 +826,46 @@ public partial class MainWindow : Window
                     var path = file?.Path?.LocalPath;
                     if (!string.IsNullOrEmpty(path))
                     {
-                        await viewModel.OpenFileAsync(path);
+                        await fileVm.OpenFileAsync(path);
                     }
                 }
             }
         }
+    }
+    
+    /// <summary>
+    /// 计算拖拽目标位置的标签页索引
+    /// </summary>
+    private int GetTargetTabIndex(DragEventArgs e)
+    {
+        var tabControl = this.FindControl<TabControl>("MainTabControl");
+        if (tabControl == null) return -1;
+        
+        var dropPoint = e.GetPosition(tabControl);
+        
+        // 遍历所有 TabItem 找到放置位置
+        for (int i = 0; i < tabControl.ItemCount; i++)
+        {
+            var tabItem = tabControl.ItemContainerGenerator.ContainerFromIndex(i) as AvaloniaTabItem;
+            if (tabItem == null) continue;
+            
+            var bounds = tabItem.Bounds;
+            if (bounds.Contains(dropPoint))
+            {
+                // 判断是在左半部分还是右半部分
+                var midPoint = bounds.X + bounds.Width / 2;
+                if (dropPoint.X < midPoint)
+                {
+                    return i;
+                }
+                else
+                {
+                    return i + 1;
+                }
+            }
+        }
+        
+        return -1;
     }
 
     private bool _isClosing;
@@ -788,4 +1043,61 @@ public partial class MainWindow : Window
         ((Button)((StackPanel)dialog.Content).Children[1]).Click += (s, args) => dialog.Close();
         await dialog.ShowDialog(parent);
     }
+    
+    #region 标签页拖拽排序
+    
+    /// <summary>
+    /// 标签页指针按下事件 - 开始拖拽
+    /// </summary>
+    private void OnTabPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not StackPanel stackPanel) return;
+        if (stackPanel.Tag is not TabItemViewModel tab) return;
+        
+        var properties = e.GetCurrentPoint(null).Properties;
+        if (properties.IsLeftButtonPressed)
+        {
+            _draggedTab = tab;
+            _dragStartPoint = e.GetPosition(null);
+            _isDragging = false;
+        }
+    }
+    
+    /// <summary>
+    /// 标签页指针移动事件 - 检测拖拽
+    /// </summary>
+    private void OnTabPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_draggedTab == null) return;
+        
+        var currentPoint = e.GetPosition(null);
+        var diff = currentPoint - _dragStartPoint;
+        
+        // 移动超过 5 像素才认为是拖拽
+        if (!_isDragging && (Math.Abs(diff.X) > 5 || Math.Abs(diff.Y) > 5))
+        {
+            _isDragging = true;
+        }
+        
+        if (_isDragging)
+        {
+            // 开始拖拽操作
+            var data = new DataObject();
+            data.Set("TabItem", _draggedTab);
+            
+            // 开始拖拽，需要 PointerEventArgs
+            DragDrop.DoDragDrop(e, data, DragDropEffects.Move);
+        }
+    }
+    
+    /// <summary>
+    /// 标签页指针释放事件 - 结束拖拽
+    /// </summary>
+    private void OnTabPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        _draggedTab = null;
+        _isDragging = false;
+    }
+    
+    #endregion
 }

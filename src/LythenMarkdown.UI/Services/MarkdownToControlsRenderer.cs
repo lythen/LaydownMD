@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Media;
-using AvaloniaEdit.Utils;
 using LythenMarkdown.UI.Models;
 
 namespace LythenMarkdown.UI.Services;
@@ -104,27 +105,29 @@ public class MarkdownToControlsRenderer
             _ => BodyBrush
         };
 
-        return new TextBlock
+        var textBlock = new TextBlock
         {
-            Text = RenderInlinesToString(heading.Inlines),
             FontSize = size,
             FontWeight = heading.Level <= 2 ? FontWeight.Bold : FontWeight.SemiBold,
             Foreground = color,
             Margin = new Thickness(0, heading.Level == 1 ? 16 : 12, 0, 8),
             TextWrapping = TextWrapping.Wrap
         };
+        AddInlinesToTextBlock(textBlock, heading.Inlines);
+        return textBlock;
     }
 
     private TextBlock RenderParagraph(ParagraphBlock paragraph)
     {
-        return new TextBlock
+        var textBlock = new TextBlock
         {
-            Text = RenderInlinesToString(paragraph.Inlines),
             FontSize = BodySize,
             Foreground = BodyBrush,
             Margin = new Thickness(0, 0, 0, 12),
             TextWrapping = TextWrapping.Wrap
         };
+        AddInlinesToTextBlock(textBlock, paragraph.Inlines);
+        return textBlock;
     }
 
     private Border RenderCodeBlock(CodeBlock codeBlock)
@@ -154,7 +157,13 @@ public class MarkdownToControlsRenderer
 
     private Border RenderQuoteBlock(QuoteBlock quoteBlock)
     {
-        var content = RenderInlinesToString(quoteBlock.Inlines);
+        var textBlock = new TextBlock
+        {
+            FontSize = BodySize,
+            Foreground = BodyBrush,
+            TextWrapping = TextWrapping.Wrap
+        };
+        AddInlinesToTextBlock(textBlock, quoteBlock.Inlines);
 
         return new Border
         {
@@ -163,13 +172,7 @@ public class MarkdownToControlsRenderer
             BorderThickness = new Thickness(4, 0, 0, 0),
             Padding = new Thickness(12, 8),
             Margin = new Thickness(0, 0, 0, 12),
-            Child = new TextBlock
-            {
-                Text = content,
-                FontSize = BodySize,
-                Foreground = BodyBrush,
-                TextWrapping = TextWrapping.Wrap
-            }
+            Child = textBlock
         };
     }
 
@@ -183,15 +186,16 @@ public class MarkdownToControlsRenderer
 
         foreach (var item in list.Items)
         {
-            var content = RenderInlinesToString(item.Inlines);
-            panel.Children.Add(new TextBlock
+            var textBlock = new TextBlock
             {
-                Text = $"• {content}",
                 FontSize = BodySize,
                 Foreground = BodyBrush,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2)
-            });
+            };
+            textBlock.Inlines.Add(new Run { Text = "• " });
+            AddInlinesToTextBlock(textBlock, item.Inlines);
+            panel.Children.Add(textBlock);
 
             // 嵌套列表
             var nestedContent = RenderNestedLists(item);
@@ -219,15 +223,16 @@ public class MarkdownToControlsRenderer
         int number = list.StartNumber;
         foreach (var item in list.Items)
         {
-            var content = RenderInlinesToString(item.Inlines);
-            panel.Children.Add(new TextBlock
+            var textBlock = new TextBlock
             {
-                Text = $"{number}. {content}",
                 FontSize = BodySize,
                 Foreground = BodyBrush,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 2)
-            });
+            };
+            textBlock.Inlines.Add(new Run { Text = $"{number}. " });
+            AddInlinesToTextBlock(textBlock, item.Inlines);
+            panel.Children.Add(textBlock);
             number++;
 
             // 嵌套列表
@@ -261,34 +266,76 @@ public class MarkdownToControlsRenderer
         };
     }
 
-    private string RenderInlinesToString(List<MarkdownInline> inlines)
+    /// <summary>
+    /// 将内联元素转为纯文本（用于代码块、列表前缀等不需要格式化的场景）
+    /// </summary>
+    private static string RenderInlinesToString(List<MarkdownInline> inlines)
     {
-        var result = new System.Text.StringBuilder();
+        var result = new StringBuilder();
 
         foreach (var inline in inlines)
         {
             if (inline is TextInline text)
-            {
                 result.Append(text.Text);
-            }
             else if (inline is CodeInline code)
-            {
                 result.Append(code.Text);
-            }
             else if (inline is LinkInline link)
-            {
                 result.Append(link.Text);
-            }
             else if (inline is BoldInline bold)
-            {
                 result.Append(RenderInlinesToString(bold.Children));
-            }
             else if (inline is ItalicInline italic)
-            {
                 result.Append(RenderInlinesToString(italic.Children));
-            }
         }
 
         return result.ToString();
+    }
+
+    /// <summary>
+    /// 将内联元素转换为格式化 Run 并添加到 TextBlock.Inlines
+    /// </summary>
+    private static void AddInlinesToTextBlock(TextBlock textBlock, List<MarkdownInline> inlines)
+    {
+        foreach (var inline in inlines)
+        {
+            switch (inline)
+            {
+                case TextInline text:
+                    textBlock.Inlines.Add(new Run { Text = text.Text });
+                    break;
+
+                case CodeInline code:
+                    textBlock.Inlines.Add(new Run
+                    {
+                        Text = code.Text,
+                        FontFamily = CodeFont,
+                        Background = new SolidColorBrush(Color.Parse("#F0F0F0"))
+                    });
+                    break;
+
+                case BoldInline bold:
+                    textBlock.Inlines.Add(new Run
+                    {
+                        Text = RenderInlinesToString(bold.Children),
+                        FontWeight = FontWeight.Bold
+                    });
+                    break;
+
+                case ItalicInline italic:
+                    textBlock.Inlines.Add(new Run
+                    {
+                        Text = RenderInlinesToString(italic.Children),
+                        FontStyle = FontStyle.Italic
+                    });
+                    break;
+
+                case LinkInline link:
+                    textBlock.Inlines.Add(new Run
+                    {
+                        Text = link.Text,
+                        Foreground = LinkBrush
+                    });
+                    break;
+            }
+        }
     }
 }

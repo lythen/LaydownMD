@@ -1,355 +1,372 @@
 <Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:AvaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
-        xmlns:vm="clr-namespace:LythenMarkdown.UI.ViewModels"
-        xmlns:views="clr-namespace:LythenMarkdown.UI.Views"
+		xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+		xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+		xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+		xmlns:AvaloniaEdit="clr-namespace:AvaloniaEdit;assembly=AvaloniaEdit"
+		xmlns:vm="clr-namespace:LythenMarkdown.UI.ViewModels"
+		xmlns:views="clr-namespace:LythenMarkdown.UI.Views"
 
-        mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
-        x:Class="LythenMarkdown.UI.MainWindow"
-        Title="Lythen-Markdown"
-        Width="1200" Height="800"
-        MinWidth="800" MinHeight="600"
-        WindowStartupLocation="CenterScreen"
-        Icon="/Assets/icon.ico">
+		mc:Ignorable="d" d:DesignWidth="1200" d:DesignHeight="800"
+		x:Class="LythenMarkdown.UI.MainWindow"
+		Title="Lythen-Markdown"
+		Width="1200" Height="800"
+		MinWidth="800" MinHeight="600"
+		WindowStartupLocation="CenterScreen"
+		Icon="/Assets/icon.ico">
 
-    <Window.Resources>
-        <views:ViewModeToBoolConverter x:Key="EditModeConverter" TargetMode="Edit"/>
-        <views:ViewModeToBoolConverter x:Key="SplitModeConverter" TargetMode="Split"/>
-        <views:ViewModeToBoolConverter x:Key="PreviewModeConverter" TargetMode="Preview"/>
-    </Window.Resources>
+	<Window.Resources>
+		<views:ViewModeToBoolConverter x:Key="EditModeConverter" TargetMode="Edit"/>
+		<views:ViewModeToBoolConverter x:Key="SplitModeConverter" TargetMode="Split"/>
+		<views:ViewModeToBoolConverter x:Key="PreviewModeConverter" TargetMode="Preview"/>
+	</Window.Resources>
 
-    <Design.DataContext>
-        <vm:MainViewModel/>
-    </Design.DataContext>
+	<Design.DataContext>
+		<vm:MainViewModel/>
+	</Design.DataContext>
 
-    <Window.Styles>
-        <Style Selector="Button.toolbar">
-            <Setter Property="Width" Value="36"/>
-            <Setter Property="Height" Value="36"/>
-            <Setter Property="Margin" Value="2"/>
-            <Setter Property="Padding" Value="6"/>
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-        </Style>
-        <Style Selector="Button.toolbar:pointerover">
-            <Setter Property="Background" Value="#333333"/>
-        </Style>
-        <Style Selector="Button.closeButton">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="4,2"/>
-        </Style>
-        <Style Selector="Button.closeButton:pointerover">
-            <Setter Property="Background" Value="#E81123"/>
-        </Style>
-        <!-- 只读文档的选项卡样式 -->
-        <Style Selector="TabItem:selected /template/ ContentPresenter">
-            <Setter Property="Background" Value="#2D2D2D"/>
-        </Style>
-        <Style Selector="TabItem">
-            <Setter Property="Foreground" Value="#888888"/>
-        </Style>
-        <Style Selector="TabItem:pointerover">
-            <Setter Property="Foreground" Value="#D4D4D4"/>
-        </Style>
-    </Window.Styles>
+	<Window.Styles>
+		<Style Selector="Button.toolbar">
+			<Setter Property="Width" Value="23"/>
+			<Setter Property="Height" Value="23"/>
+			<Setter Property="Margin" Value="1"/>
+			<Setter Property="Padding" Value="2"/>
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderThickness" Value="0"/>
+		</Style>
+		<Style Selector="Button.toolbar:pointerover">
+			<Setter Property="Background" Value="#333333"/>
+		</Style>
+		<Style Selector="Button.closeButton">
+			<Setter Property="Background" Value="Transparent"/>
+			<Setter Property="BorderThickness" Value="0"/>
+			<Setter Property="Padding" Value="4,2"/>
+		</Style>
+		<Style Selector="Button.closeButton:pointerover">
+			<Setter Property="Background" Value="#E81123"/>
+		</Style>
+		<!-- 选项卡样式：文字居中、边框立体阴影 -->
+		<Style Selector="TabItem">
+			<Setter Property="Foreground" Value="#888888"/>
+			<Setter Property="Padding" Value="8,3"/>
+			<Setter Property="MinHeight" Value="34"/>
+			<Setter Property="FontSize" Value="12"/>
+			<Setter Property="HorizontalContentAlignment" Value="Center"/>
+			<Setter Property="VerticalContentAlignment" Value="Center"/>
+		</Style>
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto">
-        <!-- 1. 菜单栏 -->
-        <Menu Grid.Row="0">
-            <MenuItem Header="_文件">
-                <MenuItem Header="_新建" Command="{Binding NewFileCommand}" InputGesture="Ctrl+N"/>
-                <MenuItem Header="_打开..." Command="{Binding OpenFileCommand}" InputGesture="Ctrl+O"/>
-                <Separator/>
-                <MenuItem Header="_保存" Command="{Binding SaveCommand}" InputGesture="Ctrl+S"/>
-                <MenuItem Header="另存为..." Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
-                <Separator/>
-                <MenuItem Header="关闭" Command="{Binding CloseTabCommand}" CommandParameter="{Binding SelectedTab}" InputGesture="Ctrl+W"/>
-                <Separator/>
-                <MenuItem Header="退出" Command="{Binding ExitCommand}" InputGesture="Alt+F4"/>
-            </MenuItem>
-            <MenuItem Header="_编辑">
-                <MenuItem Header="_撤销" Command="{Binding UndoCommand}" InputGesture="Ctrl+Z"/>
-                <MenuItem Header="_重做" Command="{Binding RedoCommand}" InputGesture="Ctrl+Y"/>
-                <Separator/>
-                <MenuItem Header="剪_切" Command="{Binding CutCommand}" InputGesture="Ctrl+X"/>
-                <MenuItem Header="_复制" Command="{Binding CopyCommand}" InputGesture="Ctrl+C"/>
-                <MenuItem Header="_粘贴" Command="{Binding PasteCommand}" InputGesture="Ctrl+V"/>
-                <Separator/>
-                <MenuItem Header="全选" InputGesture="Ctrl+A"/>
-            </MenuItem>
-            <MenuItem Header="视图(_V)">
-                <MenuItem Header="编辑模式(_1)" Click="OnEditMode" InputGesture="Ctrl+1"/>
-                <MenuItem Header="分栏模式(_2)" Click="OnSplitMode" InputGesture="Ctrl+2"/>
-                <MenuItem Header="预览模式(_3)" Click="OnPreviewMode" InputGesture="Ctrl+3"/>
-            </MenuItem>
-            <MenuItem Header="调试(_D)">
-                <MenuItem Header="保存会话" Click="OnSaveSession"/>
-                <MenuItem Header="查看 session.json" Click="OnOpenSessionFile"/>
-                <MenuItem Header="显示会话内容" Click="OnShowSessionContent"/>
-            </MenuItem>
-            <MenuItem Header="格式(_F)">
-                <MenuItem Header="加粗" InputGesture="Ctrl+B" x:Name="BoldMenuItem"/>
-                <MenuItem Header="斜体" InputGesture="Ctrl+I" x:Name="ItalicMenuItem"/>
-                <MenuItem Header="代码"/>
-                <Separator/>
-                <MenuItem Header="链接" InputGesture="Ctrl+K" x:Name="LinkMenuItem"/>
-                <MenuItem Header="图片"/>
-                <Separator/>
-                <MenuItem Header="标题 1" x:Name="H1MenuItem"/>
-                <MenuItem Header="标题 2" x:Name="H2MenuItem"/>
-                <MenuItem Header="标题 3"/>
-                <Separator/>
-                <MenuItem Header="无序列表"/>
-                <MenuItem Header="有序列表"/>
-                <MenuItem Header="引用块"/>
-            </MenuItem>
-            <MenuItem Header="帮助(_H)">
-                <MenuItem Header="使用说明" Command="{Binding ShowUserGuideCommand}"/>
-                <MenuItem Header="关于 Lythen-Markdown" Command="{Binding ShowAboutCommand}"/>
-            </MenuItem>
-        </Menu>
+		<!-- 控制标签间距：每个 TabItem 右侧留 1px 间隔 -->
+		<Style Selector="TabItem:selected /template/ ContentPresenter">
+			<Setter Property="Background" Value="#2D2D2D"/>
+		</Style>
+		<Style Selector="TabItem:pointerover">
+			<Setter Property="Foreground" Value="#D4D4D4"/>
+		</Style>
+	</Window.Styles>
 
-        <!-- 2. 工具栏 -->
-        <Border Grid.Row="1" Background="#2D2D2D" Padding="4">
-            <WrapPanel Orientation="Horizontal">
-                <!-- 文件操作 -->
-                <Button Classes="toolbar" Command="{Binding NewFileCommand}" ToolTip.Tip="新建 (Ctrl+N)" x:Name="NewToolButton">
-                    <TextBlock Text="📄" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" Command="{Binding OpenFileCommand}" ToolTip.Tip="打开 (Ctrl+O)" x:Name="OpenToolButton">
-                    <TextBlock Text="📂" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" Command="{Binding SaveCommand}" ToolTip.Tip="保存 (Ctrl+S)" x:Name="SaveToolButton">
-                    <TextBlock Text="💾" FontSize="18"/>
-                </Button>
+	<Grid RowDefinitions="Auto,Auto,*,Auto">
+		<!-- 1. 菜单栏 -->
+		<Menu Grid.Row="0">
+			<MenuItem Header="_文件">
+				<MenuItem Header="_新建" Command="{Binding NewFileCommand}" InputGesture="Ctrl+N"/>
+				<MenuItem Header="_打开..." Command="{Binding OpenFileCommand}" InputGesture="Ctrl+O"/>
+				<Separator/>
+				<MenuItem Header="_保存" Command="{Binding SaveCommand}" InputGesture="Ctrl+S"/>
+				<MenuItem Header="另存为..." Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
+				<Separator/>
+				<MenuItem Header="关闭" Command="{Binding CloseTabCommand}" CommandParameter="{Binding SelectedTab}" InputGesture="Ctrl+W"/>
+				<Separator/>
+				<MenuItem Header="退出" Command="{Binding ExitCommand}" InputGesture="Alt+F4"/>
+			</MenuItem>
+			<MenuItem Header="_编辑">
+				<MenuItem Header="_撤销" Click="OnUndo" InputGesture="Ctrl+Z"/>
+				<MenuItem Header="_重做" Click="OnRedo" InputGesture="Ctrl+Y"/>
+				<Separator/>
+				<MenuItem Header="剪_切" Click="OnCut" InputGesture="Ctrl+X"/>
+				<MenuItem Header="_复制" Click="OnCopy" InputGesture="Ctrl+C"/>
+				<MenuItem Header="_粘贴" Click="OnPaste" InputGesture="Ctrl+V"/>
+				<Separator/>
+				<MenuItem Header="全选" Click="OnSelectAll" InputGesture="Ctrl+A"/>
+			</MenuItem>
+			<MenuItem Header="视图(_V)">
+				<MenuItem Header="编辑模式(_1)" Click="OnEditMode" InputGesture="Ctrl+1"/>
+				<MenuItem Header="分栏模式(_2)" Click="OnSplitMode" InputGesture="Ctrl+2"/>
+				<MenuItem Header="预览模式(_3)" Click="OnPreviewMode" InputGesture="Ctrl+3"/>
+				<Separator/>
+				<MenuItem Header="弹窗预览" Click="OnPopupPreview" x:Name="PopupPreviewMenuItem"/>
+			</MenuItem>
+			<MenuItem Header="调试(_D)">
+				<MenuItem Header="保存会话" Click="OnSaveSession"/>
+				<MenuItem Header="查看 session.json" Click="OnOpenSessionFile"/>
+				<MenuItem Header="显示会话内容" Click="OnShowSessionContent"/>
+			</MenuItem>
+			<MenuItem Header="格式(_F)">
+				<MenuItem Header="加粗" InputGesture="Ctrl+B" x:Name="BoldMenuItem"/>
+				<MenuItem Header="斜体" InputGesture="Ctrl+I" x:Name="ItalicMenuItem"/>
+				<MenuItem Header="代码"/>
+				<Separator/>
+				<MenuItem Header="链接" InputGesture="Ctrl+K" x:Name="LinkMenuItem"/>
+				<MenuItem Header="图片"/>
+				<Separator/>
+				<MenuItem Header="标题 1" x:Name="H1MenuItem"/>
+				<MenuItem Header="标题 2" x:Name="H2MenuItem"/>
+				<MenuItem Header="标题 3"/>
+				<Separator/>
+				<MenuItem Header="无序列表"/>
+				<MenuItem Header="有序列表"/>
+				<MenuItem Header="引用块"/>
+			</MenuItem>
+			<MenuItem Header="帮助(_H)">
+				<MenuItem Header="使用说明" Command="{Binding ShowUserGuideCommand}"/>
+				<MenuItem Header="关于 Lythen-Markdown" Command="{Binding ShowAboutCommand}"/>
+			</MenuItem>
+		</Menu>
 
-                <Rectangle Width="1" Fill="#555555" Margin="6,4"/>
+		<!-- 2. 工具栏 -->
+		<Border Grid.Row="1" Background="#2D2D2D" Padding="2">
+			<WrapPanel Orientation="Horizontal">
+				<!-- 文件操作 -->
+				<Button Classes="toolbar" Command="{Binding NewFileCommand}" ToolTip.Tip="新建 (Ctrl+N)" x:Name="NewToolButton">
+					<TextBlock Text="📄" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" Command="{Binding OpenFileCommand}" ToolTip.Tip="打开 (Ctrl+O)" x:Name="OpenToolButton">
+					<TextBlock Text="📂" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" Command="{Binding SaveCommand}" ToolTip.Tip="保存 (Ctrl+S)" x:Name="SaveToolButton">
+					<TextBlock Text="💾" FontSize="12"/>
+				</Button>
 
-                <!-- 撤销重做 -->
-                <Button Classes="toolbar" Command="{Binding UndoCommand}" ToolTip.Tip="撤销 (Ctrl+Z)" x:Name="UndoToolButton">
-                    <TextBlock Text="↩" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" Command="{Binding RedoCommand}" ToolTip.Tip="重做 (Ctrl+Y)" x:Name="RedoToolButton">
-                    <TextBlock Text="↪" FontSize="18"/>
-                </Button>
+				<Rectangle Width="1" Fill="#555555" Margin="4,2"/>
 
-                <Rectangle Width="1" Fill="#555555" Margin="6,4"/>
+				<!-- 撤销重做 -->
+				<Button Classes="toolbar" Click="OnUndo" ToolTip.Tip="撤销 (Ctrl+Z)" x:Name="UndoToolButton">
+					<TextBlock Text="↩" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" Click="OnRedo" ToolTip.Tip="重做 (Ctrl+Y)" x:Name="RedoToolButton">
+					<TextBlock Text="↪" FontSize="12"/>
+				</Button>
 
-                <!-- 格式化按钮 -->
-                <Button Classes="toolbar" ToolTip.Tip="加粗 (Ctrl+B)" x:Name="BoldToolButton">
-                    <TextBlock Text="B" FontSize="16" FontWeight="Bold"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="斜体 (Ctrl+I)" x:Name="ItalicToolButton">
-                    <TextBlock Text="I" FontSize="16" FontStyle="Italic"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="代码" x:Name="CodeToolButton">
-                    <TextBlock Text="&lt;/&gt;" FontSize="12"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="链接 (Ctrl+K)" x:Name="LinkToolButton">
-                    <TextBlock Text="🔗" FontSize="18"/>
-                </Button>
+				<Rectangle Width="1" Fill="#555555" Margin="4,2"/>
 
-                <Rectangle Width="1" Fill="#555555" Margin="6,4"/>
+				<!-- 格式化按钮 -->
+				<Button Classes="toolbar" ToolTip.Tip="加粗 (Ctrl+B)" x:Name="BoldToolButton">
+					<TextBlock Text="B" FontSize="11" FontWeight="Bold"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="斜体 (Ctrl+I)" x:Name="ItalicToolButton">
+					<TextBlock Text="I" FontSize="11" FontStyle="Italic"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="代码" x:Name="CodeToolButton">
+					<TextBlock Text="&lt;/&gt;" FontSize="8"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="链接 (Ctrl+K)" x:Name="LinkToolButton">
+					<TextBlock Text="🔗" FontSize="12"/>
+				</Button>
 
-                <!-- 列表和引用 -->
-                <Button Classes="toolbar" ToolTip.Tip="无序列表" x:Name="ListToolButton">
-                    <TextBlock Text="☰" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="有序列表" x:Name="OrderedListToolButton">
-                    <TextBlock Text="1." FontSize="14"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="引用块" x:Name="QuoteToolButton">
-                    <TextBlock Text="❝" FontSize="18"/>
-                </Button>
+				<Rectangle Width="1" Fill="#555555" Margin="4,2"/>
 
-                <Rectangle Width="1" Fill="#555555" Margin="6,4"/>
+				<!-- 列表和引用 -->
+				<Button Classes="toolbar" ToolTip.Tip="无序列表" x:Name="ListToolButton">
+					<TextBlock Text="☰" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="有序列表" x:Name="OrderedListToolButton">
+					<TextBlock Text="1." FontSize="10"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="引用块" x:Name="QuoteToolButton">
+					<TextBlock Text="❝" FontSize="12"/>
+				</Button>
 
-                <!-- 标题 -->
-                <Button Classes="toolbar" ToolTip.Tip="标题 1" x:Name="H1ToolButton">
-                    <TextBlock Text="H1" FontSize="14" FontWeight="Bold"/>
-                </Button>
-                <Button Classes="toolbar" ToolTip.Tip="标题 2" x:Name="H2ToolButton">
-                    <TextBlock Text="H2" FontSize="14" FontWeight="Bold"/>
-                </Button>
+				<Rectangle Width="1" Fill="#555555" Margin="4,2"/>
 
-                <Rectangle Width="1" Fill="#555555" Margin="6,4"/>
+				<!-- 标题 -->
+				<Button Classes="toolbar" ToolTip.Tip="标题 1" x:Name="H1ToolButton">
+					<TextBlock Text="H1" FontSize="10" FontWeight="Bold"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="标题 2" x:Name="H2ToolButton">
+					<TextBlock Text="H2" FontSize="10" FontWeight="Bold"/>
+				</Button>
 
-                <!-- 视图模式切换 -->
-                <Button Classes="toolbar" Click="OnEditMode" ToolTip.Tip="编辑模式 (Ctrl+1)" x:Name="EditModeToolButton">
-                    <TextBlock Text="📝" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" Click="OnSplitMode" ToolTip.Tip="分栏模式 (Ctrl+2)" x:Name="SplitModeToolButton">
-                    <TextBlock Text="⬛" FontSize="18"/>
-                </Button>
-                <Button Classes="toolbar" Click="OnPreviewMode" ToolTip.Tip="预览模式 (Ctrl+3)" x:Name="PreviewModeToolButton">
-                    <TextBlock Text="👁" FontSize="18"/>
-                </Button>
-            </WrapPanel>
-        </Border>
+				<Rectangle Width="1" Fill="#555555" Margin="4,2"/>
 
-        <!-- 3. 主内容区 -->
-        <Grid Grid.Row="2">
-            <!-- 空状态提示（无标签页时显示） -->
-            <Border IsVisible="{Binding !Tabs.Count}" Background="#1E1E1E">
-                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <TextBlock Text="Lythen-Markdown"
-                               FontSize="32"
-                               FontWeight="Bold"
-                               HorizontalAlignment="Center"
-                               Foreground="White"/>
-                    <TextBlock Text="轻量、流畅、高颜值的 Markdown 编辑器"
-                               FontSize="14"
-                               Foreground="#888888"
-                               HorizontalAlignment="Center"
-                               Margin="0,10,0,30"/>
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                        <Button Content="新建文件" Command="{Binding NewFileCommand}" Padding="20,12" Margin="5" FontSize="14"/>
-                        <Button Content="打开文件" Command="{Binding OpenFileCommand}" Padding="20,12" Margin="5" FontSize="14"/>
-                    </StackPanel>
-                    <TextBlock Text="或拖拽 .md 文件到此处"
-                               FontSize="12"
-                               Foreground="#666666"
-                               HorizontalAlignment="Center"
-                               Margin="0,30,0,0"/>
-                </StackPanel>
-            </Border>
+				<!-- 视图模式切换 -->
+				<Button Classes="toolbar" ToolTip.Tip="编辑模式 (Ctrl+1)" x:Name="EditModeToolButton">
+					<TextBlock Text="📝" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="分栏模式 (Ctrl+2)" x:Name="SplitModeToolButton">
+					<TextBlock Text="⬛" FontSize="12"/>
+				</Button>
+				<Button Classes="toolbar" ToolTip.Tip="预览模式 (Ctrl+3)" x:Name="PreviewModeToolButton">
+					<TextBlock Text="👁" FontSize="12"/>
+				</Button>
+			</WrapPanel>
+		</Border>
 
-            <!-- 内容区域 -->
-            <Grid>
-                <!-- 选项卡和编辑器区域 -->
-                <TabControl IsVisible="{Binding HasTabs}"
-                            ItemsSource="{Binding Tabs}"
-                            SelectedItem="{Binding SelectedTab}"
-                            x:Name="MainTabControl">
-                    <TabControl.ItemTemplate>
-                        <DataTemplate x:DataType="vm:TabItemViewModel">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <StackPanel.ContextMenu>
-                                    <ContextMenu>
-                                        <MenuItem Header="打开文件位置"
-                                                  Command="{Binding MainViewModel.OpenFileLocationCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="关闭"
-                                                  Command="{Binding MainViewModel.CloseTabCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="关闭左边"
-                                                  Command="{Binding MainViewModel.CloseTabsToLeftCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="关闭右边"
-                                                  Command="{Binding MainViewModel.CloseTabsToRightCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <Separator/>
-                                        <MenuItem Header="关闭其他"
-                                                  Command="{Binding MainViewModel.CloseOtherTabsCommand}"
-                                                  CommandParameter="{Binding}"/>
-                                        <MenuItem Header="关闭全部"
-                                                  Command="{Binding MainViewModel.CloseAllTabsCommand}"/>
-                                    </ContextMenu>
-                                </StackPanel.ContextMenu>
-                                <TextBlock Text="{Binding TabTitle}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
-                                <Button Classes="closeButton"
-                                        Command="{Binding $parent[TabControl].((vm:MainViewModel)DataContext).CloseTabCommand}"
-                                        CommandParameter="{Binding}"
-                                        ToolTip.Tip="关闭">
-                                    <TextBlock Text="✕" FontSize="12"/>
-                                </Button>
-                            </StackPanel>
-                        </DataTemplate>
-                    </TabControl.ItemTemplate>
-                    <TabControl.ContentTemplate>
-                        <DataTemplate x:DataType="vm:TabItemViewModel">
-                            <!-- 使用 Panel 层叠布局，通过 ZIndex 控制层叠顺序 -->
-                            <Panel Background="#1E1E1E">
-                                <!-- 1. 预览模式：预览全屏显示（ZIndex=0，最底层） -->
-                                <Border Background="#FFFFFF"
-                                        ZIndex="0"
-                                        IsVisible="{Binding ViewMode, Converter={StaticResource PreviewModeConverter}}">
-                                    <ScrollViewer x:Name="PreviewScrollViewer"/>
-                                </Border>
-                                
-                                <!-- 2. 分栏模式布局（ZIndex=1，中间层） -->
-                                <Grid ZIndex="1"
-                                      IsVisible="{Binding ViewMode, Converter={StaticResource SplitModeConverter}}"
-                                      ColumnDefinitions="*,5,*">
-                                    <!-- 左侧编辑器 -->
-                                    <AvaloniaEdit:TextEditor Grid.Column="0"
-                                                              FontFamily="Consolas, Courier New"
-                                                              FontSize="14"
-                                                              ShowLineNumbers="True"
-                                                              Background="#1E1E1E"
-                                                              Foreground="#D4D4D4"
-                                                              HorizontalScrollBarVisibility="Auto"
-                                                              VerticalScrollBarVisibility="Auto"/>
-                                    <!-- 分隔线 -->
-                                    <Border Grid.Column="1" Background="#3C3C3C"/>
-                                    <!-- 右侧预览 -->
-                                    <Border Grid.Column="2" Background="#FFFFFF">
-                                        <ScrollViewer x:Name="SplitPreviewScrollViewer"/>
-                                    </Border>
-                                </Grid>
-                                
-                                <!-- 3. 编辑模式：全屏编辑器（ZIndex=2，最顶层） -->
-                                <AvaloniaEdit:TextEditor ZIndex="2"
-                                                          IsVisible="{Binding ViewMode, Converter={StaticResource EditModeConverter}}"
-                                                          FontFamily="Consolas, Courier New"
-                                                          FontSize="14"
-                                                          ShowLineNumbers="True"
-                                                          Background="#1E1E1E"
-                                                          Foreground="#D4D4D4"
-                                                          HorizontalScrollBarVisibility="Auto"
-                                                          VerticalScrollBarVisibility="Auto"/>
-                            </Panel>
-                        </DataTemplate>
-                    </TabControl.ContentTemplate>
-                </TabControl>
-            </Grid>
-        </Grid>
+		<!-- 3. 主内容区 -->
+		<Grid Grid.Row="2">
+			<!-- 空状态提示（无标签页时显示） -->
+			<Border IsVisible="{Binding !Tabs.Count}" Background="#1E1E1E">
+				<StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+					<TextBlock Text="Lythen-Markdown"
+							   FontSize="32"
+							   FontWeight="Bold"
+							   HorizontalAlignment="Center"
+							   Foreground="White"/>
+					<TextBlock Text="轻量、流畅、高颜值的 Markdown 编辑器"
+							   FontSize="14"
+							   Foreground="#888888"
+							   HorizontalAlignment="Center"
+							   Margin="0,10,0,30"/>
+					<StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+						<Button Content="新建文件" Command="{Binding NewFileCommand}" Padding="20,12" Margin="5" FontSize="14"/>
+						<Button Content="打开文件" Command="{Binding OpenFileCommand}" Padding="20,12" Margin="5" FontSize="14"/>
+					</StackPanel>
+					<TextBlock Text="或拖拽 .md 文件到此处"
+							   FontSize="12"
+							   Foreground="#666666"
+							   HorizontalAlignment="Center"
+							   Margin="0,30,0,0"/>
+				</StackPanel>
+			</Border>
 
-        <!-- 4. 状态栏 -->
-        <Border Grid.Row="3" Background="#007ACC" Padding="8,4">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
-                <!-- 状态消息 -->
-                <TextBlock Grid.Column="0"
-                           Text="{Binding StatusMessage}"
-                           Foreground="White"
-                           VerticalAlignment="Center"/>
+			<!-- 内容区域 -->
+			<Grid>
+				<!-- 选项卡和编辑器区域 -->
+				<TabControl IsVisible="{Binding HasTabs}"
+							ItemsSource="{Binding Tabs}"
+							SelectedItem="{Binding SelectedTab}"
+							x:Name="MainTabControl"
+							DragDrop.AllowDrop="True">
+					<TabControl.ItemTemplate>
+						<DataTemplate x:DataType="vm:TabItemViewModel">
+							<StackPanel Orientation="Horizontal" Spacing="1"
+										PointerPressed="OnTabPointerPressed"
+										PointerMoved="OnTabPointerMoved"
+										PointerReleased="OnTabPointerReleased"
+										Tag="{Binding}">
+								<StackPanel.ContextMenu>
+									<ContextMenu>
+										<MenuItem Header="打开文件位置"
+												  Command="{Binding MainViewModel.OpenFileLocationCommand}"
+												  CommandParameter="{Binding}"/>
+										<Separator/>
+										<MenuItem Header="关闭"
+												  Command="{Binding MainViewModel.CloseTabCommand}"
+												  CommandParameter="{Binding}"/>
+										<Separator/>
+										<MenuItem Header="关闭左边"
+												  Command="{Binding MainViewModel.CloseTabsToLeftCommand}"
+												  CommandParameter="{Binding}"/>
+										<MenuItem Header="关闭右边"
+												  Command="{Binding MainViewModel.CloseTabsToRightCommand}"
+												  CommandParameter="{Binding}"/>
+										<Separator/>
+										<MenuItem Header="关闭其他"
+												  Command="{Binding MainViewModel.CloseOtherTabsCommand}"
+												  CommandParameter="{Binding}"/>
+										<MenuItem Header="关闭全部"
+												  Command="{Binding MainViewModel.CloseAllTabsCommand}"/>
+									</ContextMenu>
+								</StackPanel.ContextMenu>
+								<TextBlock Text="{Binding TabTitle}"
+										   FontSize="12"
+										   Padding ="5, 0, 5, 0"
+										   VerticalAlignment="Center"/>
+								<Button Classes="closeButton"
+										Command="{Binding $parent[TabControl].((vm:MainViewModel)DataContext).CloseTabCommand}"
+										CommandParameter="{Binding}"
+										ToolTip.Tip="关闭">
+									<TextBlock Text="✕" FontSize="9"/>
+								</Button>
+							</StackPanel>
+						</DataTemplate>
+					</TabControl.ItemTemplate>
+					<TabControl.ContentTemplate>
+						<DataTemplate x:DataType="vm:TabItemViewModel">
+							<!-- 使用 Panel 层叠布局，通过 ZIndex 控制层叠顺序 -->
+							<Panel Background="#1E1E1E">
+								<!-- 1. 预览模式：预览全屏显示（ZIndex=0，最底层） -->
+								<Border Background="#FFFFFF"
+										ZIndex="0"
+										IsVisible="{Binding ViewMode, Converter={StaticResource PreviewModeConverter}}">
+									<ScrollViewer x:Name="PreviewScrollViewer"/>
+								</Border>
 
-                <!-- 当前视图模式 -->
-                <TextBlock Grid.Column="1"
-                           Text="{Binding CurrentViewModeText}"
-                           Foreground="White"
-                           Margin="20,0,0,0"
-                           VerticalAlignment="Center"/>
+								<!-- 2. 分栏模式布局（ZIndex=1，中间层） -->
+								<Grid ZIndex="1"
+									  IsVisible="{Binding ViewMode, Converter={StaticResource SplitModeConverter}}"
+									  ColumnDefinitions="*,5,*">
+									<!-- 左侧编辑器 -->
+									<AvaloniaEdit:TextEditor x:Name="MainEditor"
+															 Grid.Column="0"
+															 FontFamily="Consolas, Courier New"
+															 FontSize="14"
+															 ShowLineNumbers="True"
+															 Background="#1E1E1E"
+															 Foreground="#D4D4D4"
+															 HorizontalScrollBarVisibility="Auto"
+															 VerticalScrollBarVisibility="Auto"/>
+									<!-- 分隔线 -->
+									<Border Grid.Column="1" Background="#3C3C3C"/>
+									<!-- 右侧预览 -->
+									<Border Grid.Column="2" Background="#FFFFFF">
+										<ScrollViewer x:Name="SplitPreviewScrollViewer"/>
+									</Border>
+								</Grid>
 
-                <!-- 行号列号 -->
-                <TextBlock Grid.Column="2"
-                           x:Name="LineColumnText"
-                           Text="行 1, 列 1"
-                           Foreground="White"
-                           Margin="20,0,0,0"
-                           VerticalAlignment="Center"/>
+								<!-- 3. 编辑模式：全屏编辑器（ZIndex=2，最顶层） -->
+								<AvaloniaEdit:TextEditor x:Name="SplitEditor"
+														 ZIndex="2"
+														 IsVisible="{Binding ViewMode, Converter={StaticResource EditModeConverter}}"
+														 FontFamily="Consolas, Courier New"
+														 FontSize="14"
+														 ShowLineNumbers="True"
+														 Background="#1E1E1E"
+														 Foreground="#D4D4D4"
+														 HorizontalScrollBarVisibility="Auto"
+														 VerticalScrollBarVisibility="Auto"/>
+							</Panel>
+						</DataTemplate>
+					</TabControl.ContentTemplate>
+				</TabControl>
+			</Grid>
+		</Grid>
 
-                <!-- 编码 -->
-                <TextBlock Grid.Column="3"
-                           Text="UTF-8"
-                           Foreground="White"
-                           Margin="20,0,0,0"
-                           VerticalAlignment="Center"/>
+		<!-- 4. 状态栏 -->
+		<Border Grid.Row="3" Background="#007ACC" Padding="8,4">
+			<Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto">
+				<!-- 状态消息 -->
+				<TextBlock Grid.Column="0"
+						   Text="{Binding StatusMessage}"
+						   Foreground="White"
+						   VerticalAlignment="Center"/>
 
-                <!-- 选项卡数量 -->
-                <TextBlock Grid.Column="4"
-                           Foreground="White"
-                           Margin="20,0,0,0"
-                           VerticalAlignment="Center"
-                           Text="{Binding Tabs.Count, StringFormat='标签: {0}'}"/>
-            </Grid>
-        </Border>
-    </Grid>
+				<!-- 当前视图模式 -->
+				<TextBlock Grid.Column="1"
+						   Text="{Binding CurrentViewModeText}"
+						   Foreground="White"
+						   Margin="20,0,0,0"
+						   VerticalAlignment="Center"/>
+
+				<!-- 行号列号 -->
+				<TextBlock Grid.Column="2"
+						   x:Name="LineColumnText"
+						   Text="行 1, 列 1"
+						   Foreground="White"
+						   Margin="20,0,0,0"
+						   VerticalAlignment="Center"/>
+
+				<!-- 编码 -->
+				<TextBlock Grid.Column="3"
+						   Text="UTF-8"
+						   Foreground="White"
+						   Margin="20,0,0,0"
+						   VerticalAlignment="Center"/>
+
+				<!-- 选项卡数量 -->
+				<TextBlock Grid.Column="4"
+						   Foreground="White"
+						   Margin="20,0,0,0"
+						   VerticalAlignment="Center"
+						   Text="{Binding Tabs.Count, StringFormat='标签: {0}'}"/>
+			</Grid>
+		</Border>
+	</Grid>
 </Window>

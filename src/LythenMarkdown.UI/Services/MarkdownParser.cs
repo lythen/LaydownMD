@@ -223,8 +223,8 @@ public class MarkdownParser
     {
         var children = ConvertInlines(emphasis);
 
-        // 简单判断：子元素超过1个或文本长度超过3认为是粗体
-        if (children.Count > 1)
+        // 使用 Markdig 的 DelimiterCount 精确判断：**=2（粗体）, *=1（斜体）
+        if (emphasis.DelimiterCount >= 2)
         {
             return new Models.BoldInline
             {

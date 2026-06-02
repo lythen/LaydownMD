@@ -276,6 +276,45 @@ public partial class TabItemViewModel : ObservableObject
     }
 
     /// <summary>
+    /// 在当前光标位置插入 Markdown 格式
+    /// </summary>
+    /// <param name="prefix">前缀（如 **）</param>
+    /// <param name="suffix">后缀（如 **）</param>
+    /// <param name="caretOffset">当前光标位置</param>
+    /// <param name="selectionLength">选区长度（0表示无选区）</param>
+    public void InsertMarkdown(string prefix, string suffix, int caretOffset, int selectionLength)
+    {
+        if (selectionLength > 0)
+        {
+            // 有选中文本：在选区末尾插入后缀，在开头插入前缀
+            var endOffset = caretOffset + selectionLength;
+            SharedDocument.Insert(endOffset, suffix);
+            SharedDocument.Insert(caretOffset, prefix);
+        }
+        else
+        {
+            // 无选中文本：插入前后缀，光标定位到中间
+            SharedDocument.Insert(caretOffset, prefix + suffix);
+        }
+    }
+
+    /// <summary>
+    /// 获取第一个已注册的编辑器
+    /// </summary>
+    public TextEditor? GetFirstRegisteredEditor()
+    {
+        return _editors.FirstOrDefault();
+    }
+    
+    /// <summary>
+    /// 获取最后一个已注册的编辑器（通常是最新的编辑器）
+    /// </summary>
+    public TextEditor? GetLastRegisteredEditor()
+    {
+        return _editors.LastOrDefault();
+    }
+
+    /// <summary>
     /// 标记为已编辑状态（用于从会话恢复时）
     /// </summary>
     public void MarkAsEdited()
@@ -350,7 +389,7 @@ public partial class TabItemViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 防抖渲染（150ms 延迟）
+    /// 防抖渲染（150ms 延迟），渲染工作在后台线程执行，避免 UI 卡死
     /// </summary>
     private void DebouncedRender(string content)
     {
@@ -358,45 +397,60 @@ public partial class TabItemViewModel : ObservableObject
         _renderDebounceCts?.Cancel();
         _renderDebounceCts = new CancellationTokenSource();
 
-        // 异步防抖渲染
-        _ = RenderWithDebounceAsync(content, _renderDebounceCts.Token);
-    }
+        // 捕获内容快照，避免闭包引用变化
+        var contentSnapshot = content;
 
-    private async Task RenderWithDebounceAsync(string content, CancellationToken token)
-    {
-        try
+        // 在后台线程执行渲染，防抖延迟也在后台
+        _ = Task.Run(async () =>
         {
-            // 等待防抖延迟
-            await Task.Delay(DebounceDelayMs, token);
-            
-            // 执行渲染
-            var html = _renderService.Render(content);
-            var controls = _controlsRenderer.Render(content);
-            
-            // 更新 UI（在主线程）
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            try
             {
-                RenderedHtml = html;
-                WebViewSource = CreateDataUri(html);
-                RenderedControls = controls;
-            });
-        }
-        catch (TaskCanceledException)
-        {
-            // 被取消，正常处理
-        }
+                // 等待防抖延迟（在后台线程）
+                await Task.Delay(DebounceDelayMs, _renderDebounceCts.Token);
+
+                // 后台线程：执行 HTML 渲染（无 UI 依赖，可后台运行）
+                var html = _renderService.Render(contentSnapshot);
+
+                // 回到 UI 线程：构建 Avalonia 控件树（必须在 UI 线程）
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        var controls = _controlsRenderer.Render(contentSnapshot);
+                        RenderedHtml = html;
+                        WebViewSource = CreateDataUri(html);
+                        RenderedControls = controls;
+                    }
+                    catch
+                    {
+                        // 忽略控件树构建时的异常（如窗口已关闭）
+                    }
+                });
+            }
+            catch (TaskCanceledException)
+            {
+                // 被取消，正常处理
+            }
+        }, _renderDebounceCts.Token);
     }
 
     public void ForceRender()
     {
         _renderDebounceCts?.Cancel();
         var content = SharedDocument.Text;
-        var html = _renderService.Render(content);
-        var controls = _controlsRenderer.Render(content);
-        
-        RenderedHtml = html;
-        WebViewSource = CreateDataUri(html);
-        RenderedControls = controls;
+
+        // 后台线程渲染 HTML，UI 线程构建控件树
+        Task.Run(() =>
+        {
+            var html = _renderService.Render(content);
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var controls = _controlsRenderer.Render(content);
+                RenderedHtml = html;
+                WebViewSource = CreateDataUri(html);
+                RenderedControls = controls;
+            });
+        });
     }
 
     /// <summary>

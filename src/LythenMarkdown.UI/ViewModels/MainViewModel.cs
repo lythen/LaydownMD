@@ -821,7 +821,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ShowPopupPreview()
     {
-        // TODO: 实现弹窗预览
+        // 弹窗预览通过 MainWindow.OnPopupPreview 实现，
+        // 此处保留命令用于可能的工具栏按钮绑定
     }
 
     [RelayCommand]
